@@ -84,6 +84,17 @@ flutter:
   #       - asset: fonts/TrajanPro.ttf
   #       - asset: fonts/TrajanPro_Bold.ttf
   #         weight: 700
+  fonts:
+    - family: Menlo
+      fonts:
+        - asset: fonts/Menlo/Menlo-Regular.ttf
+        - asset: fonts/Menlo/Menlo-Italic.ttf
+          style: italic
+        - asset: fonts/Menlo/Menlo-Bold.ttf
+          weight: 700
+        - asset: fonts/Menlo/Menlo-BoldItalic.ttf
+          style: italic
+          weight: 700
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
