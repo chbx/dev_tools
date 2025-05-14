@@ -8,3 +8,14 @@ void collapseAll() {
     activeNodesToCollapse.reversed.forEach(toggleNode);
 }
 ```
+
+
+```dart
+// $flutter/packages/flutter/lib/src/rendering/paragraph.dart:3534
+void paint(PaintingContext context, Offset offset) {
+  for (final TextBox textBox in paragraph.getBoxesForSelection(selection,
+      boxHeightStyle: ui.BoxHeightStyle.max)) {
+    context.canvas.drawRect(textBox.toRect().shift(offset), selectionPaint);
+  }
+}
+```

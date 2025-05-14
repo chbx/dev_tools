@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../common.dart';
+import '../search.dart';
 import 'json_view_model.dart';
 import 'parser/parser.dart';
 
@@ -14,6 +17,7 @@ const double _rowHeight = 24.0;
 const double _iconSize = 12;
 const double _iconBoxSize = 16;
 const double _iconAfterSpace = 4;
+const double _matchHorizontalScrollSpace = 16.0;
 
 class ColorTheme {
   final Color? key;
@@ -24,6 +28,8 @@ class ColorTheme {
   final Color? colon;
   final Color? comma;
   final Color? indent;
+  final Color findMatchBackground;
+  final Color activeFindMatchBackground;
 
   const ColorTheme({
     this.key,
@@ -34,11 +40,13 @@ class ColorTheme {
     this.colon,
     this.comma,
     this.indent,
+    required this.findMatchBackground,
+    required this.activeFindMatchBackground,
   });
 }
 
 const Color _defaultIndentColor = Color(0xFFd3d3d3);
-const ColorTheme defaultTheme = ColorTheme(
+final ColorTheme defaultTheme = ColorTheme(
   key: Color(0xFF0451a5),
   string: Color(0xFFa31515),
   literal: Color(0xFF0000ff),
@@ -47,10 +55,32 @@ const ColorTheme defaultTheme = ColorTheme(
   colon: Color(0xFF3b3b3b),
   comma: Color(0xFF3b3b3b),
   indent: _defaultIndentColor,
+  // TODO
+  findMatchBackground: Colors.amberAccent.withValues(alpha: 0.6),
+  activeFindMatchBackground: Colors.redAccent.withValues(alpha: 0.6),
 );
 
-class JsonViewerController {
+class JsonViewFindMatch with SearchableDataMixin {
+  final TreeSliverNode<TreeNodeData> ref;
+  final List<TreeSliverNode<TreeNodeData>> path;
+  final int start;
+  final int end;
+  final int length;
+
+  JsonViewFindMatch({
+    required this.ref,
+    required this.path,
+    required this.start,
+    required this.end,
+  }) : length = end - start;
+}
+
+class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   _JsonViewerState? _state;
+
+  JsonViewerController() {
+    init();
+  }
 
   String? getTextContent() {
     var jsonValue = _state?._jsonValue;
@@ -72,6 +102,9 @@ class JsonViewerController {
       if (jsonValue != null) {
         state._updateState(() {
           state._treeNode = buildTreeNodes(jsonValue, defaultExpand: false);
+
+          // TODO
+          refreshSearchMatches();
         });
       }
     }
@@ -84,9 +117,88 @@ class JsonViewerController {
       if (jsonValue != null) {
         state._updateState(() {
           state._treeNode = buildTreeNodes(jsonValue);
+
+          // TODO
+          refreshSearchMatches();
         });
       }
     }
+  }
+
+  @override
+  List<JsonViewFindMatch> matchesForSearch(
+    String search, {
+    bool searchPreviousMatches = false,
+  }) {
+    var treeNode = _state?._treeNode;
+
+    if (treeNode == null) {
+      return [];
+    }
+
+    // TODO
+    search = search.toLowerCase();
+
+    var allMatches = <JsonViewFindMatch>[];
+    if (searchPreviousMatches) {
+      var previousMatches = searchMatches.value;
+
+      var nodes = HashSet<TreeSliverNode<TreeNodeData>>();
+      for (final previousMatch in previousMatches) {
+        var notExist = nodes.add(previousMatch.ref);
+        if (notExist) {
+          _searchNode(
+            previousMatch.ref,
+            previousMatch.path,
+            search,
+            allMatches,
+          );
+        }
+      }
+    } else {
+      _searchTree(treeNode, [treeNode], search, allMatches);
+    }
+
+    return allMatches;
+  }
+
+  void _searchTree(
+    TreeSliverNode<TreeNodeData> node,
+    List<TreeSliverNode<TreeNodeData>> path,
+    String search,
+    List<JsonViewFindMatch> allMatches,
+  ) {
+    _searchNode(node, path, search, allMatches);
+    for (var child in node.children) {
+      _searchTree(child, [...path, child], search, allMatches);
+    }
+  }
+
+  void _searchNode(
+    TreeSliverNode<TreeNodeData> node,
+    List<TreeSliverNode<TreeNodeData>> path,
+    String search,
+    List<JsonViewFindMatch> allMatches,
+  ) {
+    var content = node.content.stringForFind;
+    var matches = search.allMatches(content);
+    for (var match in matches) {
+      allMatches.add(
+        JsonViewFindMatch(
+          start: match.start,
+          end: match.end,
+          ref: node,
+          path: path,
+        ),
+      );
+    }
+  }
+
+  @override
+  void onMatchChanged(int index, bool fromNavigation) {}
+
+  void dispose() {
+    searchDispose();
   }
 }
 
@@ -317,6 +429,173 @@ class _JsonViewerContent extends StatefulWidget {
 
 class _JsonViewerContentState extends State<_JsonViewerContent> {
   @override
+  void initState() {
+    widget.jsonViewerController.activeSearchMatch.addListener(
+      _onActiveSearchMatchChange,
+    );
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    widget.jsonViewerController.activeSearchMatch.removeListener(
+      _onActiveSearchMatchChange,
+    );
+    super.dispose();
+  }
+
+  void _onActiveSearchMatchChange() {
+    _scroll();
+  }
+
+  void _scroll() {
+    var activeMatch = widget.jsonViewerController.activeSearchMatch.value;
+    if (activeMatch == null) {
+      return;
+    }
+    var treeNode = widget.treeNode;
+
+    for (var node in activeMatch.path.sublist(0, activeMatch.path.length - 1)) {
+      if (!node.isExpanded) {
+        widget.treeSliverController.toggleNode(node);
+      }
+    }
+    var offsetLines = _computeOffsetLines(treeNode, activeMatch.path);
+    _maybeScrollToLine(widget.verticalController, offsetLines);
+    _maybeScrollToColumn(widget.horizontalController, activeMatch);
+  }
+
+  int _computeOffsetLines(
+    TreeSliverNode<TreeNodeData> treeNode,
+    List<TreeSliverNode<TreeNodeData>> path,
+  ) {
+    return _countLines(treeNode, path.sublist(1));
+  }
+
+  int _countLines(
+    TreeSliverNode<TreeNodeData> nodeTree,
+    List<TreeSliverNode<TreeNodeData>>? path,
+  ) {
+    if (path != null && path.isNotEmpty) {
+      var node = path.first;
+      var count = 0;
+      for (var child in nodeTree.children) {
+        count += 1;
+        if (child == node) {
+          var remainPath = path.sublist(1);
+          if (remainPath.isNotEmpty) {
+            count += _countLines(child, remainPath);
+          }
+
+          break;
+        } else {
+          count += _countLines(child, null);
+        }
+      }
+      return count;
+    } else {
+      if (nodeTree.isExpanded) {
+        var count = nodeTree.children.length;
+        for (var child in nodeTree.children) {
+          count += _countLines(child, null);
+        }
+        return count;
+      } else {
+        return 0;
+      }
+    }
+  }
+
+  void _maybeScrollToLine(ScrollController scrollController, int? lineNumber) {
+    if (lineNumber == null) return;
+    final rowHeight = _rowHeight;
+
+    final isOutOfViewTop =
+        lineNumber * rowHeight < scrollController.offset + rowHeight;
+    final isOutOfViewBottom =
+        lineNumber * rowHeight >
+        scrollController.offset + widget.height - rowHeight;
+
+    if (isOutOfViewTop || isOutOfViewBottom) {
+      // Scroll this search token to the middle of the view.
+      final targetOffset = math.max<double>(
+        lineNumber * rowHeight - widget.height / 2,
+        0.0,
+      );
+      unawaited(
+        scrollController.animateTo(
+          targetOffset,
+          duration: defaultDuration,
+          curve: defaultCurve,
+        ),
+      );
+    }
+  }
+
+  void _maybeScrollToColumn(
+    ScrollController scrollController,
+    JsonViewFindMatch activeMatch,
+  ) {
+    var node = activeMatch.ref;
+    var spans = node.content.computeTextSpan(
+      expanded: node.isExpanded,
+      hasChild: node.children.isNotEmpty,
+      indentDepth: node.depth!,
+      theme: null,
+    );
+
+    var text = TextSpan(children: spans).toPlainText();
+    var preMatchText = text.substring(0, activeMatch.start);
+    final textPainter = TextPainter(
+      //TODO style
+      text: TextSpan(text: preMatchText, style: widget.textStyle),
+      textAlign: TextAlign.left,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final width = _prefixWidth + node.depth! * _rowExtent + textPainter.width;
+
+    var matchText = text.substring(
+      activeMatch.start,
+      activeMatch.start + activeMatch.length,
+    );
+    final textPainter2 = TextPainter(
+      //TODO style
+      text: TextSpan(text: matchText, style: widget.textStyle),
+      textAlign: TextAlign.left,
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final matchTextWidth = textPainter2.width;
+
+    double? targetOffset;
+    if (width < scrollController.offset) {
+      // isOutOfViewLeft
+      targetOffset = math.max(width - _matchHorizontalScrollSpace, 0.0);
+    } else if (width + matchTextWidth >
+        scrollController.offset + widget.width) {
+      // isOutOfViewRight && !isOutOfViewLeft
+
+      if (matchTextWidth > widget.width) {
+        targetOffset = math.max(width - _matchHorizontalScrollSpace, 0.0);
+      } else {
+        targetOffset = math.min(
+          width + matchTextWidth + _matchHorizontalScrollSpace - widget.width,
+          scrollController.position.maxScrollExtent,
+        );
+      }
+    }
+
+    if (targetOffset != null) {
+      unawaited(
+        scrollController.animateTo(
+          targetOffset,
+          duration: defaultDuration,
+          curve: defaultCurve,
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return CustomScrollView(
       scrollBehavior: ScrollConfiguration.of(
@@ -327,12 +606,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
         TreeSliver(
           tree: [widget.treeNode],
           controller: widget.treeSliverController,
-          treeNodeBuilder: (context, node, animationStyle) {
-            return _JsonViewerRowItem(
-              node: node as TreeSliverNode<TreeNodeData>,
-              theme: widget.colorTheme,
-            );
-          },
+          treeNodeBuilder: _treeNodeBuilder,
           treeRowExtentBuilder: (node, dimensions) => _rowHeight,
           toggleAnimationStyle: AnimationStyle.noAnimation,
           indentation: TreeSliverIndentationType.none,
@@ -340,6 +614,35 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
         ),
       ],
     );
+  }
+
+  Widget _treeNodeBuilder(
+    BuildContext context,
+    TreeSliverNode<Object?> node,
+    AnimationStyle animationStyle,
+  ) {
+    return ListenableBuilder(
+      listenable: widget.jsonViewerController.searchMatches,
+      builder: (context, child) {
+        return ListenableBuilder(
+          listenable: widget.jsonViewerController.activeSearchMatch,
+          builder: (context, child) {
+            return _JsonViewerRowItem(
+              node: node as TreeSliverNode<TreeNodeData>,
+              theme: widget.colorTheme,
+              searchMatches: _searchMatchesForLine(node),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<JsonViewFindMatch> _searchMatchesForLine(TreeSliverNode<Object?> node) {
+    // TODO
+    return widget.jsonViewerController.searchMatches.value
+        .where((searchMatch) => searchMatch.ref == node)
+        .toList();
   }
 }
 
@@ -381,10 +684,12 @@ class _JsonViewerRowItem extends StatelessWidget {
     super.key,
     required this.theme,
     required this.node,
+    required this.searchMatches,
   });
 
   final ColorTheme? theme;
   final TreeSliverNode<TreeNodeData> node;
+  final List<JsonViewFindMatch> searchMatches;
 
   @override
   Widget build(BuildContext context) {
@@ -443,9 +748,99 @@ class _JsonViewerRowItem extends StatelessWidget {
             ),
           ),
         if (isParentNode) const SizedBox(width: _iconAfterSpace),
-        Text.rich(TextSpan(children: spans)),
+        Text.rich(searchAwareLineContents(spans, context)),
       ],
     );
+  }
+
+  TextSpan searchAwareLineContents(
+    List<InlineSpan> spans,
+    BuildContext context,
+  ) {
+    if (searchMatches.isNotEmpty) {
+      for (var match in searchMatches) {
+        var matchColor =
+            match.isActiveSearchMatch
+                ? theme?.activeFindMatchBackground ?? Color(0xFFFF0000)
+                : theme?.findMatchBackground ?? Color(0xFFBC3939);
+
+        spans = _contentsWithMatch(spans, match, matchColor, context: context);
+      }
+    }
+    return TextSpan(children: spans);
+  }
+
+  List<InlineSpan> _contentsWithMatch(
+    List<InlineSpan> startingContents,
+    JsonViewFindMatch match,
+    Color matchColor, {
+    required BuildContext context,
+  }) {
+    final contentsWithMatch = <InlineSpan>[];
+    var startColumnForSpan = 0;
+    for (final span in startingContents) {
+      final spanText = span.toPlainText();
+      // TODO
+      final startColumnForMatch = match.start;
+      if (startColumnForSpan <= startColumnForMatch &&
+          startColumnForSpan + spanText.length > startColumnForMatch) {
+        // The active search is part of this [span].
+        final matchStartInSpan = startColumnForMatch - startColumnForSpan;
+        final matchEndInSpan = matchStartInSpan + match.length;
+
+        // Add the part of [span] that occurs before the search match.
+        contentsWithMatch.add(
+          TextSpan(
+            text: spanText.substring(0, matchStartInSpan),
+            style: span.style,
+          ),
+        );
+
+        final matchStyle = (span.style ?? DefaultTextStyle.of(context).style)
+            .copyWith(color: Colors.black, backgroundColor: matchColor);
+
+        if (matchEndInSpan <= spanText.length) {
+          final matchText = spanText.substring(
+            matchStartInSpan,
+            matchEndInSpan,
+          );
+          final trailingText = spanText.substring(matchEndInSpan);
+          // Add the match and any part of [span] that occurs after the search
+          // match.
+          contentsWithMatch.addAll([
+            TextSpan(text: matchText, style: matchStyle),
+            if (trailingText.isNotEmpty)
+              TextSpan(
+                text: spanText.substring(matchEndInSpan),
+                style: span.style,
+              ),
+          ]);
+        } else {
+          // In this case, the active search match exists across multiple spans,
+          // so we need to add the part of the match that is in this [span] and
+          // continue looking for the remaining part of the match in the spans
+          // to follow.
+          contentsWithMatch.add(
+            TextSpan(
+              text: spanText.substring(matchStartInSpan),
+              style: matchStyle,
+            ),
+          );
+          final remainingMatchLength =
+              match.length - (spanText.length - matchStartInSpan);
+          match = JsonViewFindMatch(
+            ref: match.ref,
+            path: match.path,
+            start: startColumnForMatch + match.length - remainingMatchLength,
+            end: startColumnForMatch + match.length,
+          );
+        }
+      } else {
+        contentsWithMatch.add(span);
+      }
+      startColumnForSpan += spanText.length;
+    }
+    return contentsWithMatch;
   }
 }
 
@@ -639,7 +1034,9 @@ class TreeNodeData {
   final bool comma;
   final bool collapsedComma;
 
-  const TreeNodeData(
+  late String stringForFind;
+
+  TreeNodeData(
     this.text, {
     this.ref,
     required this.type,
@@ -650,7 +1047,18 @@ class TreeNodeData {
     this.end = false,
     this.comma = false,
     this.collapsedComma = false,
-  });
+  }) {
+    // TODO
+    var span = TextSpan(
+      children: computeTextSpan(
+        expanded: true,
+        hasChild: false,
+        indentDepth: 0,
+        theme: null,
+      ),
+    );
+    stringForFind = span.toPlainText().toLowerCase();
+  }
 
   List<InlineSpan> computeTextSpan({
     required bool expanded,
