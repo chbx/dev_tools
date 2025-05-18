@@ -4,16 +4,21 @@ import 'package:flutter/services.dart';
 import '../shared/search.dart';
 import 'viewer.dart';
 
+const double _buttonHeight = 28;
+
 class JsonViewerMenuBar extends StatelessWidget {
   const JsonViewerMenuBar({
     super.key,
     required this.jsonViewerController,
     this.onChanged,
+    required this.showSideNotifier,
   });
 
   final JsonViewerController jsonViewerController;
 
   final ValueChanged<String>? onChanged;
+
+  final ValueNotifier<bool> showSideNotifier;
 
   @override
   Widget build(BuildContext context) {
@@ -71,24 +76,44 @@ class JsonViewerMenuBar extends StatelessWidget {
             },
             child: Text('Collapse'),
           ),
-          SizedBox(width: 8),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(width: 1, color: Colors.grey[400]!),
-              ),
-            ),
-            child: SizedBox(height: 20),
-          ),
-          SizedBox(width: 8),
-          SizedBox(
-            width: 320,
-            height: 28,
-            child: SearchField(
-              controller: jsonViewerController,
-              searchFieldEnabled: true,
-              supportsNavigation: true,
-            ),
+
+          ValueListenableBuilder(
+            valueListenable: showSideNotifier,
+            builder: (BuildContext context, bool value, Widget? child) {
+              if (value) {
+                return Container();
+              }
+              return Row(
+                children: [
+                  SizedBox(width: 8),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(width: 1, color: Colors.grey[400]!),
+                      ),
+                    ),
+                    child: SizedBox(height: 20),
+                  ),
+                  SizedBox(width: 8),
+                  SizedBox(
+                    width: 320,
+                    height: 28,
+                    child: SearchField(
+                      controller: jsonViewerController,
+                      searchFieldEnabled: true,
+                      supportsNavigation: true,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  MenuIconButton(
+                    icon: Icon(Icons.arrow_outward_rounded),
+                    onPressed: () {
+                      showSideNotifier.value = !showSideNotifier.value;
+                    },
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -105,9 +130,8 @@ class _MenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double buttonHeight = 28;
     return SizedBox(
-      height: buttonHeight,
+      height: _buttonHeight,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           elevation: 1,
@@ -136,8 +160,8 @@ class MenuIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 32,
-      height: 32,
+      width: _buttonHeight,
+      height: _buttonHeight,
       child: IconButton(
         onPressed: onPressed,
         icon: icon,
