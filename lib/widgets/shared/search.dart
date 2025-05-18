@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'common.dart';
+import 'constants.dart';
 
 mixin SearchControllerMixin<T extends SearchableDataMixin> {
   TextEditingController get searchTextFieldController =>
@@ -303,7 +304,7 @@ class _SearchFieldState extends State<SearchField> {
                   onChanged('');
                 },
               ),
-          SizedBox(width: densePadding)
+          SizedBox(width: densePadding),
         ],
       ),
     );
