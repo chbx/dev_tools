@@ -238,6 +238,7 @@ class _JsonViewerState extends State<JsonViewer> {
       if (text.isNotEmpty) {
         var jsonValue = Parser.parse(widget.text);
         displayVM = convert(jsonValue);
+        processTree(displayVM);
       }
     } catch (e, stackTrace) {
       FlutterError.reportError(

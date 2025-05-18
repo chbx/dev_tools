@@ -31,6 +31,7 @@ class TreeNodeData {
   final bool end;
   final bool comma;
   final bool collapsedComma;
+  final String? shortString;
 
   late String stringForFind;
 
@@ -44,6 +45,7 @@ class TreeNodeData {
     this.parsedType,
     this.end = false,
     this.comma = false,
+    this.shortString,
     this.collapsedComma = false,
   }) {
     // TODO
@@ -82,7 +84,18 @@ class TreeNodeData {
       spans.add(TextSpan(text: text, style: contentStyle));
     }
     if (hasChild && !expanded && collapsedTail != null) {
-      spans.add(TextSpan(text: '...'));
+      if (shortString == null) {
+        spans.add(
+          TextSpan(text: '...', style: TextStyle(color: theme?.collapse)),
+        );
+      } else {
+        spans.add(
+          TextSpan(
+            text: ' $shortString ',
+            style: TextStyle(color: theme?.shortString),
+          ),
+        );
+      }
       spans.add(TextSpan(text: collapsedTail!, style: contentStyle));
     }
     if ((!expanded && comma) || (!expanded && collapsedComma)) {
@@ -326,6 +339,8 @@ class _TreeSliverBuilder {
       comma,
     );
 
+    var shortString = jsonValue.shortString;
+
     return TreeSliverNode(
       TreeNodeData(
         '{',
@@ -333,10 +348,11 @@ class _TreeSliverBuilder {
         type: TreeNodeDataType.objectStart,
         name: prefix,
         ref: jsonValue,
+        shortString: shortString,
         collapsedComma: comma,
       ),
       children: children,
-      expanded: _defaultExpand,
+      expanded: _defaultExpand && shortString == null,
     );
   }
 

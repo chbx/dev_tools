@@ -1,7 +1,10 @@
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
+
 import 'parser/parser.dart';
-import 'parser/tokenizer.dart' show JsonNumberValue;
+import 'parser/tokenizer.dart' show JsonNumberValue, JsonNumberValueInt;
 
 sealed class JsonValueVM {}
 
@@ -19,10 +22,11 @@ class JsonNullVM implements JsonValueVM {
 
 class JsonStringVM implements JsonValueVM {
   String rawText;
+  String value;
 
   JsonValueVM? parsed;
 
-  JsonStringVM({required this.rawText, this.parsed});
+  JsonStringVM({required this.rawText, required this.value, this.parsed});
 
   @override
   bool operator ==(Object other) {
@@ -202,16 +206,7 @@ JsonValueVM convert(JsonValue value) {
       return JsonBoolVM(value.value);
     case JsonString():
       var text = value.value;
-
-      JsonValueVM? jsonValue;
-      if (text.length > 20 && (text[0] == '[' || text[0] == '{')) {
-        try {
-          var parsedValue = Parser.parse(text);
-          jsonValue = convert(parsedValue);
-        } catch (e) {}
-      }
-
-      return JsonStringVM(rawText: value.rawText, parsed: jsonValue);
+      return JsonStringVM(rawText: value.rawText, value: text);
     case JsonNumber():
       return JsonNumberVM(rawText: value.rawText, value: value.value);
     case JsonArray():
@@ -228,7 +223,10 @@ JsonObjectVM _convertNormalObject(NormalJsonObject value) {
   LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM> newMap = LinkedHashMap();
   value.entryMap.forEach((entryKey, entryValue) {
     var newKey = JsonObjectKeyStringVM(
-      JsonStringVM(rawText: entryKey.value.rawText),
+      JsonStringVM(
+        rawText: entryKey.value.rawText,
+        value: entryKey.value.value,
+      ),
     );
     newMap[newKey] = convert(entryValue);
   });
@@ -240,7 +238,12 @@ JsonObjectVM _convertEnhancedObject(EnhancedJsonObject value) {
   value.entryMap.forEach((entryKey, entryValue) {
     JsonObjectKeyVM newKey = switch (entryKey) {
       JsonObjectKeyString() =>
-        JsonObjectKeyStringVM(JsonStringVM(rawText: entryKey.value.rawText))
+        JsonObjectKeyStringVM(
+              JsonStringVM(
+                rawText: entryKey.value.rawText,
+                value: entryKey.value.value,
+              ),
+            )
             as JsonObjectKeyVM,
       JsonObjectKeyNumber() => JsonObjectKeyNumberVM(
         JsonNumberVM(
@@ -269,8 +272,6 @@ JsonObjectVM _convertObject(JsonObject value) {
       return _convertEnhancedObject(value);
   }
 }
-
-
 
 class ToStringHelper {
   bool whitespace;
@@ -374,3 +375,94 @@ class ToStringHelper {
   }
 }
 
+void processTree(JsonValueVM jsonValue) {
+  switch (jsonValue) {
+    case JsonStringVM():
+      var text = jsonValue.value;
+      if (text.length > 20 && (text[0] == '[' || text[0] == '{')) {
+        try {
+          var parsedValue = Parser.parse(text);
+          var structuredValueString = convert(parsedValue);
+          processTree(structuredValueString);
+          jsonValue.parsed = structuredValueString;
+        } catch (e, stackTrace) {
+          FlutterError.reportError(
+            FlutterErrorDetails(exception: e, stack: stackTrace),
+          );
+        }
+      }
+      break;
+    case NormalJsonObjectVM():
+      jsonValue.entryMap.values.forEach(processTree);
+      _processNormalObject(jsonValue);
+      break;
+    case JsonArrayVM():
+      jsonValue.elements.forEach(processTree);
+      break;
+    case EnhancedJsonObjectVM():
+      jsonValue.entryMap.values.forEach(processTree);
+      break;
+    default:
+      break;
+  }
+}
+
+void _processNormalObject(NormalJsonObjectVM jsonValue) {
+  _processNormalObjectShorForMoney(jsonValue);
+}
+
+void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
+  // LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM>
+  var entryMap = jsonValue.entryMap;
+  if (entryMap.length == 2) {
+    // {"cent": 0,"currency": "CNY"}
+    var cent = _getEntryMapValue(entryMap, 'cent');
+    var currency = _getEntryMapValue(entryMap, 'currency');
+    if (cent != null &&
+        cent is JsonNumberVM &&
+        currency != null &&
+        currency is JsonStringVM) {
+      var centValue = cent.value;
+      if (centValue is JsonNumberValueInt) {
+        String formatted = NumberFormat(
+          '#,###0.##',
+        ).format(centValue.intValue / 100);
+        jsonValue.shortString = '${currency.value} $formatted';
+      }
+    }
+  } else if (entryMap.length == 6) {
+    // {"amount": 50.00,"cent": 5000,"centFactor": 100,"currency": "CNY","currencyCode": "CNY","displayUnit": "元"}
+    var amount = _getEntryMapValue(entryMap, 'amount');
+    var cent = _getEntryMapValue(entryMap, 'cent');
+    var centFactor = _getEntryMapValue(entryMap, 'centFactor');
+    var currency = _getEntryMapValue(entryMap, 'currency');
+    var currencyCode = _getEntryMapValue(entryMap, 'currencyCode');
+    var displayUnit = _getEntryMapValue(entryMap, 'displayUnit');
+    if (amount != null &&
+        cent != null &&
+        cent is JsonNumberVM &&
+        centFactor != null &&
+        currency != null &&
+        currency is JsonStringVM &&
+        currencyCode != null &&
+        displayUnit != null) {
+      // todo duplicate
+      var centValue = cent.value;
+      if (centValue is JsonNumberValueInt) {
+        String formatted = NumberFormat(
+          '#,###0.##',
+        ).format(centValue.intValue / 100);
+        jsonValue.shortString = '${currency.value} $formatted';
+      }
+    }
+  }
+}
+
+JsonValueVM? _getEntryMapValue(
+  Map<JsonObjectKeyStringVM, JsonValueVM> map,
+  String keyValue,
+) {
+  return map[JsonObjectKeyStringVM(
+    JsonStringVM(rawText: '"$keyValue"', value: keyValue),
+  )];
+}

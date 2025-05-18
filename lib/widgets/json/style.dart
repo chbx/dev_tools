@@ -11,6 +11,8 @@ class ColorTheme {
   final Color? indent;
   final Color findMatchBackground;
   final Color activeFindMatchBackground;
+  final Color shortString;
+  final Color collapse;
 
   const ColorTheme({
     this.key,
@@ -23,6 +25,8 @@ class ColorTheme {
     this.indent,
     required this.findMatchBackground,
     required this.activeFindMatchBackground,
+    required this.shortString,
+    required this.collapse,
   });
 }
 
@@ -39,4 +43,6 @@ final ColorTheme defaultTheme = ColorTheme(
   // TODO
   findMatchBackground: Colors.amberAccent.withValues(alpha: 0.6),
   activeFindMatchBackground: Colors.redAccent.withValues(alpha: 0.6),
+  shortString: Colors.grey,
+  collapse: Colors.grey,
 );
