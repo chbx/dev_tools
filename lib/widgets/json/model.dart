@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart' as intl;
 
+import 'json_path/json_path.dart';
 import 'parser/parser.dart';
 import 'parser/tokenizer.dart' show JsonNumberValue, JsonNumberValueInt;
 
@@ -97,6 +98,8 @@ class NormalJsonObjectVM implements JsonObjectVM, JsonValueVM {
   LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM> entryMap;
 
   String? shortString;
+
+  JsonValueVM? ref;
 
   NormalJsonObjectVM({required this.entryMap, this.shortString});
 
@@ -379,133 +382,180 @@ class ToStringHelper {
   }
 }
 
-void processTree(JsonValueVM jsonValue, {JsonObjectKeyVM? jsonKey}) {
-  switch (jsonValue) {
-    case JsonStringVM():
-      var text = jsonValue.value;
-      if (text.length > 20 && (text[0] == '[' || text[0] == '{')) {
-        try {
-          var parsedValue = Parser.parse(text);
-          var structuredValueString = convert(parsedValue);
-          processTree(structuredValueString);
-          jsonValue.parsed = structuredValueString;
-        } catch (e, stackTrace) {
-          FlutterError.reportError(
-            FlutterErrorDetails(exception: e, stack: stackTrace),
-          );
+void processTree(JsonValueVM jsonValue, {JsonValueVM? context}) {
+  var processor = _TreeProcessor(context ?? jsonValue);
+  return processor.doProcessTree(jsonValue);
+}
+
+class _TreeProcessor {
+  final JsonValueVM _context;
+  final Map<String, JsonPath> _jsonPathCache = HashMap();
+
+  _TreeProcessor(this._context);
+
+  void doProcessTree(JsonValueVM jsonValue, {JsonObjectKeyVM? jsonKey}) {
+    switch (jsonValue) {
+      case JsonStringVM():
+        var text = jsonValue.value;
+        if (text.length > 20 && (text[0] == '[' || text[0] == '{')) {
+          try {
+            var parsedValue = Parser.parse(text);
+            var structuredValueString = convert(parsedValue);
+            doProcessTree(structuredValueString);
+            jsonValue.parsed = structuredValueString;
+          } catch (e, stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(exception: e, stack: stackTrace),
+            );
+          }
+        }
+        break;
+      case JsonNumberVM():
+        if (jsonKey != null) {
+          _processDateHint(jsonValue, jsonKey);
+        }
+        break;
+      case NormalJsonObjectVM():
+        for (var entry in jsonValue.entryMap.entries) {
+          doProcessTree(entry.value, jsonKey: entry.key);
+        }
+        _processNormalObject(jsonValue);
+        break;
+      case JsonArrayVM():
+        for (var element in jsonValue.elements) {
+          doProcessTree(element);
+        }
+        break;
+      case EnhancedJsonObjectVM():
+        for (var entry in jsonValue.entryMap.entries) {
+          doProcessTree(entry.value, jsonKey: entry.key);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  void _processNormalObject(NormalJsonObjectVM jsonValue) {
+    _processNormalObjectShorForMoney(jsonValue);
+    _processFastJsonRef(jsonValue);
+  }
+
+  void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
+    // LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM>
+    var entryMap = jsonValue.entryMap;
+    if (entryMap.length == 2) {
+      // {"cent": 0,"currency": "CNY"}
+      var cent = getEntryMapValue(entryMap, 'cent');
+      var currency = getEntryMapValue(entryMap, 'currency');
+      if (cent != null &&
+          cent is JsonNumberVM &&
+          currency != null &&
+          currency is JsonStringVM) {
+        var centValue = cent.value;
+        if (centValue is JsonNumberValueInt) {
+          String formatted = intl.NumberFormat(
+            '#,###0.##',
+          ).format(centValue.intValue / 100);
+          jsonValue.shortString = '${currency.value} $formatted';
         }
       }
-      break;
-    case JsonNumberVM():
-      if (jsonKey != null) {
-        _processDateHint(jsonValue, jsonKey);
-      }
-      break;
-    case NormalJsonObjectVM():
-      for (var entry in jsonValue.entryMap.entries) {
-        processTree(entry.value, jsonKey: entry.key);
-      }
-      _processNormalObject(jsonValue);
-      break;
-    case JsonArrayVM():
-      jsonValue.elements.forEach(processTree);
-      break;
-    case EnhancedJsonObjectVM():
-      for (var entry in jsonValue.entryMap.entries) {
-        processTree(entry.value, jsonKey: entry.key);
-      }
-      break;
-    default:
-      break;
-  }
-}
-
-void _processNormalObject(NormalJsonObjectVM jsonValue) {
-  _processNormalObjectShorForMoney(jsonValue);
-}
-
-void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
-  // LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM>
-  var entryMap = jsonValue.entryMap;
-  if (entryMap.length == 2) {
-    // {"cent": 0,"currency": "CNY"}
-    var cent = _getEntryMapValue(entryMap, 'cent');
-    var currency = _getEntryMapValue(entryMap, 'currency');
-    if (cent != null &&
-        cent is JsonNumberVM &&
-        currency != null &&
-        currency is JsonStringVM) {
-      var centValue = cent.value;
-      if (centValue is JsonNumberValueInt) {
-        String formatted = intl.NumberFormat(
-          '#,###0.##',
-        ).format(centValue.intValue / 100);
-        jsonValue.shortString = '${currency.value} $formatted';
-      }
-    }
-  } else if (entryMap.length == 6) {
-    // {"amount": 50.00,"cent": 5000,"centFactor": 100,"currency": "CNY","currencyCode": "CNY","displayUnit": "元"}
-    var amount = _getEntryMapValue(entryMap, 'amount');
-    var cent = _getEntryMapValue(entryMap, 'cent');
-    var centFactor = _getEntryMapValue(entryMap, 'centFactor');
-    var currency = _getEntryMapValue(entryMap, 'currency');
-    var currencyCode = _getEntryMapValue(entryMap, 'currencyCode');
-    var displayUnit = _getEntryMapValue(entryMap, 'displayUnit');
-    if (amount != null &&
-        cent != null &&
-        cent is JsonNumberVM &&
-        centFactor != null &&
-        currency != null &&
-        currency is JsonStringVM &&
-        currencyCode != null &&
-        displayUnit != null) {
-      // todo duplicate
-      var centValue = cent.value;
-      if (centValue is JsonNumberValueInt) {
-        String formatted = intl.NumberFormat(
-          '#,###0.##',
-        ).format(centValue.intValue / 100);
-        jsonValue.shortString = '${currency.value} $formatted';
-      }
-    }
-  }
-}
-
-void _processDateHint(JsonNumberVM jsonValue, JsonObjectKeyVM jsonKey) {
-  var jsonNum = jsonValue.value;
-  if (jsonKey is JsonObjectKeyStringVM && jsonNum is JsonNumberValueInt) {
-    var jsonKeyStr = jsonKey.value.value.toLowerCase();
-    if (jsonKeyStr.contains('gmt') ||
-        jsonKeyStr.contains('date') ||
-        jsonKeyStr.contains('time')) {
-      var dateTime = DateTime.fromMillisecondsSinceEpoch(jsonNum.intValue);
-
-      String dateTimeStr;
-      if (jsonNum.intValue % 1000 == 0) {
-        final dateFormatStr = 'yyyy-MM-dd HH:mm:ss';
-        dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
-        if (dateTimeStr.endsWith('00:00:00')) {
-          dateTimeStr = dateTimeStr.substring(0, 10);
+    } else if (entryMap.length == 6) {
+      // {"amount": 50.00,"cent": 5000,"centFactor": 100,"currency": "CNY","currencyCode": "CNY","displayUnit": "元"}
+      var amount = getEntryMapValue(entryMap, 'amount');
+      var cent = getEntryMapValue(entryMap, 'cent');
+      var centFactor = getEntryMapValue(entryMap, 'centFactor');
+      var currency = getEntryMapValue(entryMap, 'currency');
+      var currencyCode = getEntryMapValue(entryMap, 'currencyCode');
+      var displayUnit = getEntryMapValue(entryMap, 'displayUnit');
+      if (amount != null &&
+          cent != null &&
+          cent is JsonNumberVM &&
+          centFactor != null &&
+          currency != null &&
+          currency is JsonStringVM &&
+          currencyCode != null &&
+          displayUnit != null) {
+        // todo duplicate
+        var centValue = cent.value;
+        if (centValue is JsonNumberValueInt) {
+          String formatted = intl.NumberFormat(
+            '#,###0.##',
+          ).format(centValue.intValue / 100);
+          jsonValue.shortString = '${currency.value} $formatted';
         }
-      } else {
-        final dateFormatStr = 'yyyy-MM-dd HH:mm:ss.SSS';
-        dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
       }
-
-      var offset = dateTime.timeZoneOffset;
-      String utcHourOffset =
-          (offset.isNegative ? '-' : '+') +
-          offset.inHours.abs().toString().padLeft(2, '0');
-      String utcMinuteOffset = (offset.inMinutes - offset.inHours * 60)
-          .toString()
-          .padLeft(2, '0');
-      String dateTimeWithOffset = '$dateTimeStr$utcHourOffset:$utcMinuteOffset';
-      jsonValue.dateHint = dateTimeWithOffset;
     }
+  }
+
+  void _processDateHint(JsonNumberVM jsonValue, JsonObjectKeyVM jsonKey) {
+    var jsonNum = jsonValue.value;
+    if (jsonKey is JsonObjectKeyStringVM && jsonNum is JsonNumberValueInt) {
+      var jsonKeyStr = jsonKey.value.value.toLowerCase();
+      if (jsonKeyStr.contains('gmt') ||
+          jsonKeyStr.contains('date') ||
+          jsonKeyStr.contains('time')) {
+        var dateTime = DateTime.fromMillisecondsSinceEpoch(jsonNum.intValue);
+
+        String dateTimeStr;
+        if (jsonNum.intValue % 1000 == 0) {
+          final dateFormatStr = 'yyyy-MM-dd HH:mm:ss';
+          dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
+          if (dateTimeStr.endsWith('00:00:00')) {
+            dateTimeStr = dateTimeStr.substring(0, 10);
+          }
+        } else {
+          final dateFormatStr = 'yyyy-MM-dd HH:mm:ss.SSS';
+          dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
+        }
+
+        var offset = dateTime.timeZoneOffset;
+        String utcHourOffset =
+            (offset.isNegative ? '-' : '+') +
+            offset.inHours.abs().toString().padLeft(2, '0');
+        String utcMinuteOffset = (offset.inMinutes - offset.inHours * 60)
+            .toString()
+            .padLeft(2, '0');
+        String dateTimeWithOffset =
+            '$dateTimeStr$utcHourOffset:$utcMinuteOffset';
+        jsonValue.dateHint = dateTimeWithOffset;
+      }
+    }
+  }
+
+  // [{"name":"张三"},{"$ref":"$[0]"}]
+  // [{"name":"zs","rel":{"name":"lisi","rel":{"$ref":".."}}},{"$ref":"$[0].rel"}]
+  void _processFastJsonRef(NormalJsonObjectVM jsonValue) {
+    var entryMap = jsonValue.entryMap;
+    if (entryMap.length != 1) {
+      return;
+    }
+    var ref = getEntryMapValue(entryMap, r'$ref');
+    if (ref is! JsonStringVM) {
+      return;
+    }
+    var jsonPath = _cachedJsonPathParser(ref.value);
+    if (jsonPath == null) {
+      return;
+    }
+    jsonValue.ref = jsonPath.resolve(_context);
+  }
+
+  JsonPath? _cachedJsonPathParser(String path) {
+    var cached = _jsonPathCache[path];
+    if (cached != null) {
+      return cached;
+    }
+    var jsonPath = JsonPath.parse(path, fastJsonMode: true);
+    // TODO cache failed jsonPath
+    if (jsonPath != null) {
+      _jsonPathCache[path] = jsonPath;
+    }
+    return jsonPath;
   }
 }
 
-JsonValueVM? _getEntryMapValue(
+JsonValueVM? getEntryMapValue(
   Map<JsonObjectKeyStringVM, JsonValueVM> map,
   String keyValue,
 ) {

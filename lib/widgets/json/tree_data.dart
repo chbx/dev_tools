@@ -21,18 +21,22 @@ enum TreeNodeDataType {
 }
 
 class TreeNodeData {
-  final String text;
   final JsonValueVM? ref;
   final TreeNodeDataType type;
   final String? name;
-  final String? collapsedTail;
+
   final String? parsedStart;
   final TreeNodeDataType? parsedType;
   final bool end;
   final bool comma;
   final bool collapsedComma;
-  final String? shortString;
-  final String? hint;
+
+  String text;
+  String? collapsedTail;
+  String? shortString;
+  String? hint;
+
+  bool show$Ref;
 
   late String stringForFind;
 
@@ -49,6 +53,7 @@ class TreeNodeData {
     this.shortString,
     this.hint,
     this.collapsedComma = false,
+    this.show$Ref = false,
   }) {
     // TODO
     var span = TextSpan(

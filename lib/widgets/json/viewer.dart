@@ -610,7 +610,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
   }
 }
 
-class _JsonViewerRowItem extends StatelessWidget {
+class _JsonViewerRowItem extends StatefulWidget {
   const _JsonViewerRowItem({
     super.key,
     required this.theme,
@@ -623,11 +623,16 @@ class _JsonViewerRowItem extends StatelessWidget {
   final List<JsonViewFindMatch> searchMatches;
 
   @override
-  Widget build(BuildContext context) {
-    var content = node.content;
-    final bool isParentNode = node.children.isNotEmpty;
+  State<_JsonViewerRowItem> createState() => _JsonViewerRowItemState();
+}
 
-    var oriDepth = node.depth!;
+class _JsonViewerRowItemState extends State<_JsonViewerRowItem> {
+  @override
+  Widget build(BuildContext context) {
+    var content = widget.node.content;
+    final bool isParentNode = widget.node.children.isNotEmpty;
+
+    var oriDepth = widget.node.depth!;
 
     var indentDepth = oriDepth;
     if (content.end) {
@@ -635,11 +640,73 @@ class _JsonViewerRowItem extends StatelessWidget {
     }
 
     var spans = content.computeTextSpan(
-      expanded: node.isExpanded,
-      hasChild: node.children.isNotEmpty,
+      expanded: widget.node.isExpanded,
+      hasChild: widget.node.children.isNotEmpty,
       indentDepth: indentDepth,
-      theme: theme,
+      theme: widget.theme,
     );
+
+    Widget? refExpand;
+    var contentJsonValue = widget.node.content.ref;
+    if (widget.node.isExpanded &&
+        contentJsonValue != null &&
+        contentJsonValue is NormalJsonObjectVM) {
+      var fastJsonRef = contentJsonValue.ref;
+      if (fastJsonRef != null) {
+        refExpand = GestureDetector(
+          onTap: () {
+            final JsonValueVM treeNeedToShow;
+            if (content.show$Ref) {
+              treeNeedToShow = contentJsonValue;
+            } else {
+              treeNeedToShow = fastJsonRef;
+            }
+
+            var refSliverTree = buildTreeNodes(treeNeedToShow);
+
+            if (refSliverTree.children.isNotEmpty) {
+              widget.node.children.clear();
+              widget.node.children.addAll(refSliverTree.children);
+            }
+
+            // TODO 与内容相关的属性放到一起
+            content.text = refSliverTree.content.text;
+            content.collapsedTail = refSliverTree.content.collapsedTail;
+            content.shortString = refSliverTree.content.shortString;
+            content.hint = refSliverTree.content.hint;
+
+            // TODO shortString 处理
+
+            // 不需要setState，toggleNode会触发重建
+            content.show$Ref = !content.show$Ref;
+
+            TreeSliverController.of(context).toggleNode(widget.node);
+            TreeSliverController.of(context).toggleNode(widget.node);
+          },
+          child: AnimatedContainer(
+            curve: Curves.easeInOut,
+            duration: Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color:
+                  content.show$Ref
+                      ? Colors.blueGrey.shade100
+                      : widget.theme?.background ?? Colors.white,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(border: Border.all()),
+              child: SizedBox.square(
+                dimension: _iconBoxSize,
+                child: Icon(
+                  // TODO switch icon
+                  Icons.expand,
+                  size: _iconSize,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
 
     return Row(
       children: [
@@ -649,19 +716,19 @@ class _JsonViewerRowItem extends StatelessWidget {
           indent: indentDepth,
           indentWidth: _rowExtent,
           // TODO default color
-          color: theme?.indent ?? defaultIndentColor,
+          color: widget.theme?.indent ?? defaultIndentColor,
         ),
         if (isParentNode)
           GestureDetector(
             onTap: () {
-              TreeSliverController.of(context).toggleNode(node);
+              TreeSliverController.of(context).toggleNode(widget.node);
             },
             child: DecoratedBox(
               decoration: BoxDecoration(border: Border.all()),
               child: SizedBox.square(
                 dimension: _iconBoxSize,
                 child: Icon(
-                  node.isExpanded ? Icons.remove : Icons.add,
+                  widget.node.isExpanded ? Icons.remove : Icons.add,
                   size: _iconSize,
                 ),
               ),
@@ -669,9 +736,14 @@ class _JsonViewerRowItem extends StatelessWidget {
           ),
         if (isParentNode) const SizedBox(width: _iconAfterSpace),
         Text.rich(searchAwareLineContents(spans, context)),
+        if (refExpand != null) SizedBox(width: 8),
+        if (refExpand != null) refExpand,
         if (content.hint != null) SizedBox(width: 8),
         if (content.hint != null)
-          Text('// ${content.hint}', style: TextStyle(color: theme?.hint)),
+          Text(
+            '// ${content.hint}',
+            style: TextStyle(color: widget.theme?.hint),
+          ),
       ],
     );
   }
@@ -680,12 +752,12 @@ class _JsonViewerRowItem extends StatelessWidget {
     List<InlineSpan> spans,
     BuildContext context,
   ) {
-    if (searchMatches.isNotEmpty) {
-      for (var match in searchMatches) {
+    if (widget.searchMatches.isNotEmpty) {
+      for (var match in widget.searchMatches) {
         var matchColor =
             match.isActiveSearchMatch
-                ? theme?.activeFindMatchBackground ?? Color(0xFFFF0000)
-                : theme?.findMatchBackground ?? Color(0xFFBC3939);
+                ? widget.theme?.activeFindMatchBackground ?? Color(0xFFFF0000)
+                : widget.theme?.findMatchBackground ?? Color(0xFFBC3939);
 
         spans = _contentsWithMatch(spans, match, matchColor, context: context);
       }

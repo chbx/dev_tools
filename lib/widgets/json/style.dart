@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ColorTheme {
+  final Color? background;
   final Color? key;
   final Color? string;
   final Color? literal;
@@ -16,6 +17,7 @@ class ColorTheme {
   final Color hint;
 
   const ColorTheme({
+    this.background,
     this.key,
     this.string,
     this.literal,
@@ -34,6 +36,7 @@ class ColorTheme {
 
 const Color defaultIndentColor = Color(0xFFd3d3d3);
 final ColorTheme defaultTheme = ColorTheme(
+  background: Colors.white,
   key: Color(0xFF0451a5),
   string: Color(0xFFa31515),
   literal: Color(0xFF0000ff),
