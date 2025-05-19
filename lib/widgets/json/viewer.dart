@@ -641,6 +641,40 @@ class _JsonViewerRowItem extends StatelessWidget {
       theme: theme,
     );
 
+    Widget? refExpand;
+    var contentJsonValue = node.content.ref;
+    if (node.isExpanded &&
+        contentJsonValue != null &&
+        contentJsonValue is NormalJsonObjectVM) {
+      var fastJsonRef = contentJsonValue.ref;
+      if (fastJsonRef != null) {
+        refExpand = GestureDetector(
+          onTap: () {
+            var refSliverTree = buildTreeNodes(fastJsonRef);
+
+            if (refSliverTree.children.isNotEmpty) {
+              node.children.clear();
+              node.children.addAll(refSliverTree.children);
+            }
+
+            TreeSliverController.of(context).toggleNode(node);
+            TreeSliverController.of(context).toggleNode(node);
+          },
+          child: DecoratedBox(
+            decoration: BoxDecoration(border: Border.all()),
+            child: SizedBox.square(
+              dimension: _iconBoxSize,
+              child: Icon(
+                // TODO switch icon
+                Icons.expand,
+                size: _iconSize,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     return Row(
       children: [
         const SizedBox(height: _rowHeight, width: _prefixWidth),
@@ -669,6 +703,8 @@ class _JsonViewerRowItem extends StatelessWidget {
           ),
         if (isParentNode) const SizedBox(width: _iconAfterSpace),
         Text.rich(searchAwareLineContents(spans, context)),
+        if (refExpand != null) SizedBox(width: 4),
+        if (refExpand != null) refExpand,
         if (content.hint != null) SizedBox(width: 8),
         if (content.hint != null)
           Text('// ${content.hint}', style: TextStyle(color: theme?.hint)),
