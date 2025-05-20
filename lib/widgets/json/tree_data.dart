@@ -32,6 +32,7 @@ class TreeNodeData {
   final bool comma;
   final bool collapsedComma;
   final String? shortString;
+  final String? hint;
 
   late String stringForFind;
 
@@ -46,6 +47,7 @@ class TreeNodeData {
     this.end = false,
     this.comma = false,
     this.shortString,
+    this.hint,
     this.collapsedComma = false,
   }) {
     // TODO
@@ -191,6 +193,7 @@ class _TreeSliverBuilder {
           type: TreeNodeDataType.number,
           name: prefix,
           comma: comma,
+          hint: jsonValue.dateHint,
         ),
       ),
       JsonArrayVM() => _doBuildTreeNodeArray(

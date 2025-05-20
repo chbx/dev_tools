@@ -13,6 +13,7 @@ class ColorTheme {
   final Color activeFindMatchBackground;
   final Color shortString;
   final Color collapse;
+  final Color hint;
 
   const ColorTheme({
     this.key,
@@ -27,6 +28,7 @@ class ColorTheme {
     required this.activeFindMatchBackground,
     required this.shortString,
     required this.collapse,
+    required this.hint,
   });
 }
 
@@ -45,4 +47,5 @@ final ColorTheme defaultTheme = ColorTheme(
   activeFindMatchBackground: Colors.redAccent.withValues(alpha: 0.6),
   shortString: Colors.grey,
   collapse: Colors.grey,
+  hint: Colors.grey,
 );

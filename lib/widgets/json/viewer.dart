@@ -669,6 +669,9 @@ class _JsonViewerRowItem extends StatelessWidget {
           ),
         if (isParentNode) const SizedBox(width: _iconAfterSpace),
         Text.rich(searchAwareLineContents(spans, context)),
+        if (content.hint != null) SizedBox(width: 8),
+        if (content.hint != null)
+          Text('// ${content.hint}', style: TextStyle(color: theme?.hint)),
       ],
     );
   }

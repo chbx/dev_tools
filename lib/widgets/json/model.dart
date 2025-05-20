@@ -1,7 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' as intl;
 
 import 'parser/parser.dart';
 import 'parser/tokenizer.dart' show JsonNumberValue, JsonNumberValueInt;
@@ -64,6 +64,7 @@ class JsonBoolVM implements JsonValueVM {
 class JsonNumberVM implements JsonValueVM {
   final String rawText;
   final JsonNumberValue value;
+  String? dateHint;
 
   JsonNumberVM({required this.rawText, required this.value});
 
@@ -124,7 +125,7 @@ class EnhancedJsonObjectVM implements JsonObjectVM, JsonValueVM {
 
 sealed class JsonObjectKeyVM {}
 
-class JsonObjectKeyStringVM {
+class JsonObjectKeyStringVM implements JsonObjectKeyVM {
   final JsonStringVM value;
 
   JsonObjectKeyStringVM(this.value);
@@ -294,6 +295,9 @@ class ToStringHelper {
       case JsonObjectKeyObjectVM():
         toJsonString(buffer, entryKey.value);
         break;
+      case JsonObjectKeyStringVM():
+        buffer.write(entryKey.value.rawText);
+        break;
     }
   }
 
@@ -375,7 +379,7 @@ class ToStringHelper {
   }
 }
 
-void processTree(JsonValueVM jsonValue) {
+void processTree(JsonValueVM jsonValue, {JsonObjectKeyVM? jsonKey}) {
   switch (jsonValue) {
     case JsonStringVM():
       var text = jsonValue.value;
@@ -392,15 +396,24 @@ void processTree(JsonValueVM jsonValue) {
         }
       }
       break;
+    case JsonNumberVM():
+      if (jsonKey != null) {
+        _processDateHint(jsonValue, jsonKey);
+      }
+      break;
     case NormalJsonObjectVM():
-      jsonValue.entryMap.values.forEach(processTree);
+      for (var entry in jsonValue.entryMap.entries) {
+        processTree(entry.value, jsonKey: entry.key);
+      }
       _processNormalObject(jsonValue);
       break;
     case JsonArrayVM():
       jsonValue.elements.forEach(processTree);
       break;
     case EnhancedJsonObjectVM():
-      jsonValue.entryMap.values.forEach(processTree);
+      for (var entry in jsonValue.entryMap.entries) {
+        processTree(entry.value, jsonKey: entry.key);
+      }
       break;
     default:
       break;
@@ -424,7 +437,7 @@ void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
         currency is JsonStringVM) {
       var centValue = cent.value;
       if (centValue is JsonNumberValueInt) {
-        String formatted = NumberFormat(
+        String formatted = intl.NumberFormat(
           '#,###0.##',
         ).format(centValue.intValue / 100);
         jsonValue.shortString = '${currency.value} $formatted';
@@ -449,11 +462,45 @@ void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
       // todo duplicate
       var centValue = cent.value;
       if (centValue is JsonNumberValueInt) {
-        String formatted = NumberFormat(
+        String formatted = intl.NumberFormat(
           '#,###0.##',
         ).format(centValue.intValue / 100);
         jsonValue.shortString = '${currency.value} $formatted';
       }
+    }
+  }
+}
+
+void _processDateHint(JsonNumberVM jsonValue, JsonObjectKeyVM jsonKey) {
+  var jsonNum = jsonValue.value;
+  if (jsonKey is JsonObjectKeyStringVM && jsonNum is JsonNumberValueInt) {
+    var jsonKeyStr = jsonKey.value.value.toLowerCase();
+    if (jsonKeyStr.contains('gmt') ||
+        jsonKeyStr.contains('date') ||
+        jsonKeyStr.contains('time')) {
+      var dateTime = DateTime.fromMillisecondsSinceEpoch(jsonNum.intValue);
+
+      String dateTimeStr;
+      if (jsonNum.intValue % 1000 == 0) {
+        final dateFormatStr = 'yyyy-MM-dd HH:mm:ss';
+        dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
+        if (dateTimeStr.endsWith('00:00:00')) {
+          dateTimeStr = dateTimeStr.substring(0, 10);
+        }
+      } else {
+        final dateFormatStr = 'yyyy-MM-dd HH:mm:ss.SSS';
+        dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
+      }
+
+      var offset = dateTime.timeZoneOffset;
+      String utcHourOffset =
+          (offset.isNegative ? '-' : '+') +
+          offset.inHours.abs().toString().padLeft(2, '0');
+      String utcMinuteOffset = (offset.inMinutes - offset.inHours * 60)
+          .toString()
+          .padLeft(2, '0');
+      String dateTimeWithOffset = '$dateTimeStr$utcHourOffset:$utcMinuteOffset';
+      jsonValue.dateHint = dateTimeWithOffset;
     }
   }
 }
