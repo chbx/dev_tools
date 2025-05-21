@@ -43,9 +43,9 @@ final ColorTheme defaultTheme = ColorTheme(
   comma: Color(0xFF3b3b3b),
   indent: defaultIndentColor,
   // TODO
-  findMatchBackground: Colors.amberAccent.withValues(alpha: 0.6),
-  activeFindMatchBackground: Colors.redAccent.withValues(alpha: 0.6),
+  findMatchBackground: Color.fromRGBO(234, 92, 0, 0.33),
+  activeFindMatchBackground: Color(0xFFa8ac94),
   shortString: Colors.grey,
-  collapse: Colors.grey,
+  collapse: Color(0xFF808080),
   hint: Colors.grey,
 );

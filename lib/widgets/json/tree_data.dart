@@ -88,7 +88,7 @@ class TreeNodeData {
     if (hasChild && !expanded && collapsedTail != null) {
       if (shortString == null) {
         spans.add(
-          TextSpan(text: '...', style: TextStyle(color: theme?.collapse)),
+          TextSpan(text: '\u22ef', style: TextStyle(color: theme?.collapse)),
         );
       } else {
         spans.add(
