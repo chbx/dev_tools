@@ -412,14 +412,20 @@ class _TreeProcessor {
         break;
       case JsonNumberVM():
         if (jsonKey != null) {
-          _processDateHint(jsonValue, jsonKey);
+          // TODO
+          try {
+            _processDateHint(jsonValue, jsonKey);
+          } catch (e) {}
         }
         break;
       case NormalJsonObjectVM():
         for (var entry in jsonValue.entryMap.entries) {
           doProcessTree(entry.value, jsonKey: entry.key);
         }
-        _processNormalObject(jsonValue);
+        // TODO
+        try {
+          _processNormalObject(jsonValue);
+        } catch (e) {}
         break;
       case JsonArrayVM():
         for (var element in jsonValue.elements) {
