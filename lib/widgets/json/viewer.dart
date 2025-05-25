@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import '../shared/common.dart';
 import '../shared/constants.dart';
@@ -392,6 +393,10 @@ class _JsonViewerContent extends StatefulWidget {
 }
 
 class _JsonViewerContentState extends State<_JsonViewerContent> {
+  final _currentSelectedNodeNotifier = ValueNotifier<TreeSliverNode<Object?>?>(
+    null,
+  );
+
   @override
   void initState() {
     widget.jsonViewerController.activeSearchMatch.addListener(
@@ -402,10 +407,17 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
 
   @override
   void dispose() {
+    _currentSelectedNodeNotifier.dispose();
     widget.jsonViewerController.activeSearchMatch.removeListener(
       _onActiveSearchMatchChange,
     );
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JsonViewerContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // TODO process _onActiveSearchMatchChange
   }
 
   void _onActiveSearchMatchChange() {
@@ -591,10 +603,22 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
         return ListenableBuilder(
           listenable: widget.jsonViewerController.activeSearchMatch,
           builder: (context, child) {
-            return _JsonViewerRowItem(
-              node: node as TreeSliverNode<TreeNodeData>,
-              theme: widget.colorTheme,
-              searchMatches: _searchMatchesForLine(node),
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                _currentSelectedNodeNotifier.value = node;
+              },
+              child: ValueListenableBuilder<TreeSliverNode<Object?>?>(
+                valueListenable: _currentSelectedNodeNotifier,
+                builder: (context, currentSelectedNode, child) {
+                  return _JsonViewerRowItem(
+                    selected: node == currentSelectedNode,
+                    node: node as TreeSliverNode<TreeNodeData>,
+                    theme: widget.colorTheme,
+                    searchMatches: _searchMatchesForLine(node),
+                  );
+                },
+              ),
             );
           },
         );
@@ -613,11 +637,13 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
 class _JsonViewerRowItem extends StatefulWidget {
   const _JsonViewerRowItem({
     super.key,
+    required this.selected,
     required this.theme,
     required this.node,
     required this.searchMatches,
   });
 
+  final bool selected;
   final ColorTheme? theme;
   final TreeSliverNode<TreeNodeData> node;
   final List<JsonViewFindMatch> searchMatches;
@@ -743,6 +769,35 @@ class _JsonViewerRowItemState extends State<_JsonViewerRowItem> {
           Text(
             '// ${content.hint}',
             style: TextStyle(color: widget.theme?.hint),
+          ),
+        if (widget.selected) SizedBox(width: 8),
+        if (widget.selected)
+          SizedBox.square(
+            dimension: _rowHeight,
+            child: IconButton(
+              onPressed: () async {
+                final jsonValue = content.ref;
+                if (jsonValue != null) {
+                  // TODO 所有数据实现copy
+                  var toStringHelper = ToStringHelper(
+                    whitespace: false,
+                    deepParse: true,
+                  );
+                  var buffer = StringBuffer();
+                  toStringHelper.toJsonString(buffer, jsonValue);
+                  await Clipboard.setData(
+                    ClipboardData(text: buffer.toString()),
+                  );
+                }
+              },
+              style: IconButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+              ),
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.copy, size: _iconSize),
+            ),
           ),
       ],
     );
