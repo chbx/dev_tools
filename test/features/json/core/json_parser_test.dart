@@ -364,6 +364,92 @@ void main() {
         });
       }
     });
+
+    group('JSON Parser Tests - Extended Map', () {
+      test('Invalid Object Key - Accept', () {
+        expect(
+          JsonParser.parse(
+            '{'
+            '"normal": "normal-value",'
+            'true: "value-true",'
+            'false: "value-false",'
+            'null: "value-null",'
+            '123: "value-number-int",'
+            '{"objectInKey": "work"}: "value-object",'
+            '{{"objectInKey-2": "depth-2"}: ["depth-1"]}: "value-NestedObjKey"'
+            '}',
+            options: JsonParseOptions.strict(allowExtendedKeyType: true),
+          ),
+          isJsonValue(
+            ExtendedJsonObject(
+              entryMap: LinkedHashMap.of({
+                _stringKey('normal'): _plainJsonString('normal-value'),
+                JsonObjectKeyBool(JsonBool(true)): _plainJsonString(
+                  'value-true',
+                ),
+                JsonObjectKeyBool(JsonBool(false)): _plainJsonString(
+                  'value-false',
+                ),
+                JsonObjectKeyNull(): _plainJsonString('value-null'),
+                JsonObjectKeyNumber(
+                  JsonNumber(rawText: '123', value: JsonNumberValueInt(123)),
+                ): _plainJsonString('value-number-int'),
+                JsonObjectKeyObject(
+                  NormalJsonObject(
+                    entryMap: LinkedHashMap.of({
+                      _stringKey('objectInKey'): _plainJsonString('work'),
+                    }),
+                  ),
+                ): _plainJsonString('value-object'),
+                JsonObjectKeyObject(
+                  ExtendedJsonObject(
+                    entryMap: LinkedHashMap.of({
+                      JsonObjectKeyObject(
+                        NormalJsonObject(
+                          entryMap: LinkedHashMap.of({
+                            _stringKey('objectInKey-2'): _plainJsonString(
+                              'depth-2',
+                            ),
+                          }),
+                        ),
+                      ): JsonArray(elements: [_plainJsonString('depth-1')]),
+                    }),
+                  ),
+                ): _plainJsonString('value-NestedObjKey'),
+              }),
+            ),
+          ),
+        );
+      });
+
+      test('Invalid Object - Missing Comma', () {
+        expect(
+          () => JsonParser.parse(
+            '{{"key-key": true}: "value1" "key2": "value2"}',
+            options: JsonParseOptions.strict(allowExtendedKeyType: true),
+          ),
+          throwsA(isA<Exception>()),
+        );
+      });
+      test('Invalid Object - Missing Colon', () {
+        expect(
+          () => JsonParser.parse(
+            '{{"key-key": true} "value1"}',
+            options: JsonParseOptions.strict(allowExtendedKeyType: true),
+          ),
+          throwsA(isA<Exception>()),
+        );
+      });
+      test('Invalid Object - Unclosed', () {
+        expect(
+          () => JsonParser.parse(
+            '{{"key-key": true}: "value1"',
+            options: JsonParseOptions.strict(allowExtendedKeyType: true),
+          ),
+          throwsA(isA<Exception>()),
+        );
+      });
+    });
   });
 
   group('JSON Parser Tests - Space', () {

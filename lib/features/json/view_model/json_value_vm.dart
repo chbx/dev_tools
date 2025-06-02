@@ -13,12 +13,14 @@ sealed class JsonValueVM {
       case JsonString():
         return _convertJsonString(value.rawText);
       case JsonNumber():
-        return JsonNumberVM(rawText: value.rawText, value: value.value);
+        return _convertJsonNumber(value);
       case JsonArray():
         final newElements = value.elements.map((e) => from(e)).toList();
         return JsonArrayVM(elements: newElements);
       case NormalJsonObject():
         return _convertNormalObject(value);
+      case ExtendedJsonObject():
+        return _convertExtendedObject(value);
     }
   }
 
@@ -33,6 +35,10 @@ sealed class JsonValueVM {
     return JsonStringVM(rawText: rawText, allAscii: allAscii);
   }
 
+  static JsonNumberVM _convertJsonNumber(JsonNumber value) {
+    return JsonNumberVM(rawText: value.rawText, value: value.value);
+  }
+
   static JsonObjectVM _convertNormalObject(NormalJsonObject value) {
     final newMap = LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM>();
     value.entryMap.forEach((entryKey, entryValue) {
@@ -42,6 +48,38 @@ sealed class JsonValueVM {
       newMap[newKey] = from(entryValue);
     });
     return NormalJsonObjectVM(entryMap: newMap);
+  }
+
+  static JsonObjectVM _convertExtendedObject(ExtendedJsonObject value) {
+    final newMap = LinkedHashMap<JsonObjectKeyVM, JsonValueVM>();
+    value.entryMap.forEach((entryKey, entryValue) {
+      final newKey = switch (entryKey) {
+        JsonObjectKeyString() => JsonObjectKeyStringVM(
+          _convertJsonString(entryKey.value.rawText),
+        ),
+        JsonObjectKeyNumber() => JsonObjectKeyNumberVM(
+          _convertJsonNumber(entryKey.value),
+        ),
+        JsonObjectKeyBool() => JsonObjectKeyBoolVM(
+          JsonBoolVM(entryKey.value.value),
+        ),
+        JsonObjectKeyNull() => JsonObjectKeyNullVM(),
+        JsonObjectKeyObject() => JsonObjectKeyObjectVM(
+          _convertObject(entryKey.value),
+        ),
+      };
+      newMap[newKey] = from(entryValue);
+    });
+    return ExtendedJsonObjectVM(entryMap: newMap);
+  }
+
+  static JsonObjectVM _convertObject(JsonObject value) {
+    switch (value) {
+      case NormalJsonObject():
+        return _convertNormalObject(value);
+      case ExtendedJsonObject():
+        return _convertExtendedObject(value);
+    }
   }
 
   // TODO duplicate code @see JsonValue
@@ -94,6 +132,44 @@ sealed class JsonValueVM {
           }
         }
         buffer.write('}');
+        break;
+      case ExtendedJsonObjectVM():
+        buffer.write('{');
+        final iterator = jsonValue.entryMap.entries.iterator;
+        if (iterator.moveNext()) {
+          final first = iterator.current;
+          _toStringKey(first.key, buffer);
+          buffer.write(':');
+          _toJsonString(first.value, buffer);
+          while (iterator.moveNext()) {
+            final entry = iterator.current;
+            buffer.write(',');
+            _toStringKey(entry.key, buffer);
+            buffer.write(':');
+            _toJsonString(entry.value, buffer);
+          }
+        }
+        buffer.write('}');
+        break;
+    }
+  }
+
+  static void _toStringKey(JsonObjectKeyVM entryKey, StringBuffer buffer) {
+    switch (entryKey) {
+      case JsonObjectKeyNumberVM():
+        _toJsonString(entryKey.value, buffer);
+        break;
+      case JsonObjectKeyBoolVM():
+        _toJsonString(entryKey.value, buffer);
+        break;
+      case JsonObjectKeyNullVM():
+        buffer.write('null');
+        break;
+      case JsonObjectKeyObjectVM():
+        _toJsonString(entryKey.value, buffer);
+        break;
+      case JsonObjectKeyStringVM():
+        _toJsonString(entryKey.value, buffer);
         break;
     }
   }
@@ -231,6 +307,25 @@ class NormalJsonObjectVM implements JsonObjectVM, JsonValueVM {
   }
 }
 
+class ExtendedJsonObjectVM implements JsonObjectVM, JsonValueVM {
+  final LinkedHashMap<JsonObjectKeyVM, JsonValueVM> entryMap;
+
+  ExtendedJsonObjectVM({required this.entryMap});
+
+  @override
+  bool operator ==(Object other) {
+    return other is ExtendedJsonObjectVM && other.entryMap == entryMap;
+  }
+
+  @override
+  int get hashCode => mapHashCode(entryMap);
+
+  @override
+  String toString() {
+    return 'ExtendedJsonObjectVM{entryMap: $entryMap}';
+  }
+}
+
 sealed class JsonObjectKeyVM {}
 
 class JsonObjectKeyStringVM implements JsonObjectKeyVM {
@@ -249,5 +344,85 @@ class JsonObjectKeyStringVM implements JsonObjectKeyVM {
   @override
   String toString() {
     return 'JsonObjectKeyStringVM{value: $value}';
+  }
+}
+
+class JsonObjectKeyNumberVM implements JsonObjectKeyVM {
+  final JsonNumberVM value;
+
+  JsonObjectKeyNumberVM(this.value);
+
+  @override
+  bool operator ==(Object other) {
+    return other is JsonObjectKeyNumberVM && other.value == value;
+  }
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyNumberVM{value: $value}';
+  }
+}
+
+class JsonObjectKeyBoolVM implements JsonObjectKeyVM {
+  final JsonBoolVM value;
+
+  JsonObjectKeyBoolVM(this.value);
+
+  @override
+  bool operator ==(Object other) {
+    return other is JsonObjectKeyBoolVM && other.value == value;
+  }
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyBoolVM{value: ${value.value}}';
+  }
+}
+
+class JsonObjectKeyNullVM implements JsonObjectKeyVM {
+  static const JsonObjectKeyNullVM _instance = JsonObjectKeyNullVM._internal();
+
+  factory JsonObjectKeyNullVM() {
+    return _instance;
+  }
+
+  const JsonObjectKeyNullVM._internal();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is JsonObjectKeyNullVM && runtimeType == other.runtimeType;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyNullVM{}';
+  }
+}
+
+class JsonObjectKeyObjectVM implements JsonObjectKeyVM {
+  final JsonObjectVM value;
+
+  JsonObjectKeyObjectVM(this.value);
+
+  @override
+  bool operator ==(Object other) {
+    return other is JsonObjectKeyObjectVM && other.value == value;
+  }
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyObjectVM{value: $value}';
   }
 }

@@ -7,15 +7,14 @@ import 'json_value.dart';
 class JsonParser {
   final StringInterner _strInterner = StringInterner();
   final JsonTokenizer _tokenizer;
+  final JsonParseOptions _options;
 
-  JsonParser(this._tokenizer);
+  JsonParser(this._tokenizer, this._options);
 
   static JsonValue parse(String text, {JsonParseOptions? options}) {
-    final tokenizer = JsonTokenizer(
-      text,
-      options: options ?? JsonParseOptions.strict(),
-    );
-    final parser = JsonParser(tokenizer);
+    options ??= JsonParseOptions.strict();
+    final tokenizer = JsonTokenizer(text, options: options);
+    final parser = JsonParser(tokenizer, options);
     return parser._parseValue();
   }
 
@@ -111,7 +110,11 @@ class JsonParser {
 
       // key
       if (token.type != TokenType.string) {
-        throw FormatException('Expecting a string for object key');
+        if (_options.allowExtendedKeyType) {
+          return _continueParseExtendedObject(entryMap, token);
+        } else {
+          throw FormatException('Expecting a string for object key');
+        }
       }
       final keyStringValue = token.string;
       final key = JsonObjectKeyString(
@@ -139,6 +142,82 @@ class JsonParser {
       entryMap[key] = value;
     }
     return NormalJsonObject(entryMap: entryMap);
+  }
+
+  JsonObject _continueParseExtendedObject(
+    LinkedHashMap<JsonObjectKeyString, JsonValue> parsedEntryMap,
+    Token accessedToken,
+  ) {
+    final extendedMap = LinkedHashMap<JsonObjectKey, JsonValue>();
+    for (final entry in parsedEntryMap.entries) {
+      extendedMap[entry.key] = entry.value;
+    }
+
+    Token? token = accessedToken;
+    while (true) {
+      if (token == null) {
+        throw FormatException('Unexpected end of input after comma in object');
+      }
+
+      // key
+      final key = _parseJsonObjectKey(token);
+
+      // colon
+      final colonToken = _tokenizer.nextToken();
+      if (colonToken?.type != TokenType.colon) {
+        throw FormatException("Expected ':' after key in ExtendedJsonObject");
+      }
+
+      // value
+      final value = _parseValue();
+      final oldValue = extendedMap[key];
+      if (oldValue != null) {
+        throw FormatException('Duplicate key: $key');
+      }
+      extendedMap[key] = value;
+
+      // comma or endObject
+      token = _tokenizer.nextToken();
+      if (token == null) {
+        throw FormatException('Unexpected end of input in object');
+      }
+      if (token.type == TokenType.endObject) {
+        break;
+      } else if (token.type == TokenType.comma) {
+        token = _tokenizer.nextToken();
+      } else {
+        throw FormatException('Expected , or } after value in object');
+      }
+    }
+    return ExtendedJsonObject(entryMap: extendedMap);
+  }
+
+  JsonObjectKey _parseJsonObjectKey(Token keyToken) {
+    switch (keyToken.type) {
+      case TokenType.string:
+        return JsonObjectKeyString(
+          JsonString(rawText: keyToken.rawText, value: keyToken.string),
+        );
+      case TokenType.number:
+        return JsonObjectKeyNumber(
+          JsonNumber(rawText: keyToken.rawText, value: keyToken.number!),
+        );
+      case TokenType.valueTrue:
+        return JsonObjectKeyBool(JsonBool(true));
+      case TokenType.valueFalse:
+        return JsonObjectKeyBool(JsonBool(false));
+      case TokenType.valueNull:
+        return JsonObjectKeyNull();
+      case TokenType.startObject:
+        return JsonObjectKeyObject(_parseObject());
+      // case TokenType.startArray:
+      //   key = JsonObjectKeyArray(_parseArray());
+      //   break;
+      default:
+        throw FormatException(
+          "Invalid key type in JSON object: ${keyToken.type}",
+        );
+    }
   }
 }
 

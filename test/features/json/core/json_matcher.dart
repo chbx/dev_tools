@@ -12,7 +12,8 @@ Matcher _isJsonValueFieldMatch(JsonValue value) {
     JsonBool() => same(JsonBool(value.value)),
     JsonNull() => same(JsonNull()),
     JsonArray() => _isJsonArray(value),
-    NormalJsonObject() => _isJsonObject(value),
+    NormalJsonObject() => _isNormalJsonObject(value),
+    ExtendedJsonObject() => _isExtendedJsonObject(value),
   };
 }
 
@@ -43,7 +44,7 @@ Matcher _isJsonArray(JsonArray value) {
   return isA<JsonArray>().having((v) => v.elements, 'elements', matchers);
 }
 
-Matcher _isJsonObject(NormalJsonObject value) {
+Matcher _isNormalJsonObject(NormalJsonObject value) {
   final matchers =
       value.entryMap.entries
           .map(
@@ -68,9 +69,50 @@ Matcher _isJsonObject(NormalJsonObject value) {
   );
 }
 
+Matcher _isExtendedJsonObject(ExtendedJsonObject value) {
+  final matchers =
+      value.entryMap.entries
+          .map(
+            (expectedEntry) => isA<MapEntry<JsonObjectKey, JsonValue>>()
+                .having(
+                  (e) => e.key,
+                  'entry.key',
+                  _isJsonObjectKey(expectedEntry.key),
+                )
+                .having(
+                  (e) => e.value,
+                  'entry.value',
+                  _isJsonValueFieldMatch(expectedEntry.value),
+                ),
+          )
+          .toList();
+
+  return isA<ExtendedJsonObject>().having(
+    (v) => v.entryMap.entries,
+    'entryMap.entries',
+    matchers,
+  );
+}
+
 Matcher _isJsonObjectKey(JsonObjectKey objectKey) {
   return switch (objectKey) {
     JsonObjectKeyString() => isA<JsonObjectKeyString>().having(
+      (v) => v.value,
+      "value",
+      _isJsonValueFieldMatch(objectKey.value),
+    ),
+    JsonObjectKeyNumber() => isA<JsonObjectKeyNumber>().having(
+      (v) => v.value,
+      "value",
+      _isJsonValueFieldMatch(objectKey.value),
+    ),
+    JsonObjectKeyBool() => isA<JsonObjectKeyBool>().having(
+      (v) => v.value,
+      "value",
+      _isJsonValueFieldMatch(objectKey.value),
+    ),
+    JsonObjectKeyNull() => same(objectKey),
+    JsonObjectKeyObject() => isA<JsonObjectKeyObject>().having(
       (v) => v.value,
       "value",
       _isJsonValueFieldMatch(objectKey.value),

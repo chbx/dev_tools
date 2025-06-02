@@ -55,6 +55,44 @@ sealed class JsonValue {
         }
         buffer.write('}');
         break;
+      case ExtendedJsonObject():
+        buffer.write('{');
+        final iterator = jsonValue.entryMap.entries.iterator;
+        if (iterator.moveNext()) {
+          final first = iterator.current;
+          _toStringKey(first.key, buffer);
+          buffer.write(':');
+          _toJsonString(first.value, buffer);
+          while (iterator.moveNext()) {
+            final entry = iterator.current;
+            buffer.write(',');
+            _toStringKey(entry.key, buffer);
+            buffer.write(':');
+            _toJsonString(entry.value, buffer);
+          }
+        }
+        buffer.write('}');
+        break;
+    }
+  }
+
+  static void _toStringKey(JsonObjectKey entryKey, StringBuffer buffer) {
+    switch (entryKey) {
+      case JsonObjectKeyNumber():
+        _toJsonString(entryKey.value, buffer);
+        break;
+      case JsonObjectKeyBool():
+        _toJsonString(entryKey.value, buffer);
+        break;
+      case JsonObjectKeyNull():
+        buffer.write('null');
+        break;
+      case JsonObjectKeyObject():
+        _toJsonString(entryKey.value, buffer);
+        break;
+      case JsonObjectKeyString():
+        _toJsonString(entryKey.value, buffer);
+        break;
     }
   }
 }
@@ -219,6 +257,25 @@ class NormalJsonObject implements JsonObject, JsonValue {
   }
 }
 
+class ExtendedJsonObject implements JsonObject, JsonValue {
+  ExtendedJsonObject({required this.entryMap});
+
+  final LinkedHashMap<JsonObjectKey, JsonValue> entryMap;
+
+  @override
+  bool operator ==(Object other) {
+    return other is ExtendedJsonObject && mapEquals(other.entryMap, entryMap);
+  }
+
+  @override
+  int get hashCode => mapHashCode(entryMap);
+
+  @override
+  String toString() {
+    return 'ExtendedJsonObject{entryMap: $entryMap}';
+  }
+}
+
 sealed class JsonObjectKey {
   const JsonObjectKey();
 }
@@ -239,5 +296,84 @@ class JsonObjectKeyString implements JsonObjectKey {
   @override
   String toString() {
     return 'JsonObjectKeyString{value: $value}';
+  }
+}
+
+class JsonObjectKeyNumber implements JsonObjectKey {
+  final JsonNumber value;
+
+  JsonObjectKeyNumber(this.value);
+
+  @override
+  bool operator ==(Object other) {
+    return other is JsonObjectKeyNumber && other.value == value;
+  }
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyNumber{value: $value}';
+  }
+}
+
+class JsonObjectKeyBool implements JsonObjectKey {
+  final JsonBool value;
+
+  JsonObjectKeyBool(this.value);
+
+  @override
+  bool operator ==(Object other) {
+    return other is JsonObjectKeyBool && other.value == value;
+  }
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyBool{value: ${value.value}}';
+  }
+}
+
+class JsonObjectKeyNull implements JsonObjectKey {
+  static const JsonObjectKeyNull _instance = JsonObjectKeyNull._internal();
+
+  factory JsonObjectKeyNull() {
+    return _instance;
+  }
+
+  const JsonObjectKeyNull._internal();
+
+  @override
+  bool operator ==(Object other) =>
+      other is JsonObjectKeyNull && runtimeType == other.runtimeType;
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyNull{}';
+  }
+}
+
+class JsonObjectKeyObject implements JsonObjectKey {
+  final JsonObject value;
+
+  JsonObjectKeyObject(this.value);
+
+  @override
+  bool operator ==(Object other) {
+    return other is JsonObjectKeyObject && other.value == value;
+  }
+
+  @override
+  int get hashCode => value.hashCode;
+
+  @override
+  String toString() {
+    return 'JsonObjectKeyObject{value: $value}';
   }
 }
