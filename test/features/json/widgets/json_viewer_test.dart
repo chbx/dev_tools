@@ -61,7 +61,12 @@ void main() {
         );
 
         final buffer = StringBuffer();
-        final widgets = tester.widgetList(find.byType(Text));
+        final widgets = tester.widgetList(
+          find.descendant(
+            of: find.byType(InnerJsonViewer),
+            matching: find.byType(Text),
+          ),
+        );
         for (final widget in widgets) {
           if (widget is Text) {
             buffer.write(widget.textSpan!.toPlainText());

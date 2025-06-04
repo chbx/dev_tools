@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'features/json/json_viewer_page.dart';
+import 'features/json/widgets/json_viewer_controller.dart';
 
 void main() {
   runApp(const MyApp());
@@ -28,10 +29,21 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  final _jsonViewerController = JsonViewerController();
+
+  @override
+  void dispose() {
+    _jsonViewerController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(color: Colors.white, child: JsonViewerPage()),
+      body: Container(
+        color: Colors.white,
+        child: JsonViewerPage(jsonViewerController: _jsonViewerController),
+      ),
     );
   }
 }

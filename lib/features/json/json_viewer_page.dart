@@ -1,52 +1,71 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../shared/widgets/shortcuts/key_sets.dart';
+import '../../shared/widgets/shortcuts/shortcuts.dart';
 import 'widgets/json_viewer.dart';
 import 'widgets/json_viewer_controller.dart';
 import 'widgets/json_viewer_theme.dart';
 
-class JsonViewerPage extends StatefulWidget {
-  const JsonViewerPage({super.key});
+class JsonViewerPage extends StatelessWidget {
+  const JsonViewerPage({super.key, required this.jsonViewerController});
 
-  @override
-  State<JsonViewerPage> createState() => _JsonViewerPageState();
-}
-
-class _JsonViewerPageState extends State<JsonViewerPage> {
-  final JsonViewerController _jsonViewerController = JsonViewerController();
-
-  @override
-  void dispose() {
-    _jsonViewerController.dispose();
-    super.dispose();
-  }
+  final JsonViewerController jsonViewerController;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        MenuBar(
-          jsonViewerController: _jsonViewerController,
-          onChanged: (value) {
-            _jsonViewerController.text = value;
-          },
-        ),
-        Expanded(
-          child: JsonViewer(
-            themeData: JsonViewerThemeData(
-              color: defaultColorThemeData,
-              prefixWidth: 28.0,
-              indentWidth: 24.0,
-              fontFamily: 'Menlo',
-              fontSize: 14.0,
-              spaceAfterIcon: 4,
-            ),
-            controller: _jsonViewerController,
+    return KeyboardShortcuts(
+      keyboardShortcuts: buildKeyboardShortcuts(jsonViewerController),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          MenuBar(
+            jsonViewerController: jsonViewerController,
+            onChanged: (value) {
+              jsonViewerController.text = value;
+            },
           ),
-        ),
-      ],
+          Expanded(
+            child: JsonViewer(
+              themeData: JsonViewerThemeData(
+                color: defaultColorThemeData,
+                prefixWidth: 28.0,
+                indentWidth: 24.0,
+                fontFamily: 'Menlo',
+                fontSize: 14.0,
+                spaceAfterIcon: 4,
+              ),
+              controller: jsonViewerController,
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  ShortcutsConfiguration buildKeyboardShortcuts(
+    JsonViewerController controller,
+  ) {
+    final shortcuts = <LogicalKeySet, Intent>{
+      searchInFileKeySet: SearchInFileIntent(controller),
+    };
+    final actions = <Type, Action<Intent>>{
+      SearchInFileIntent: SearchInFileAction(),
+    };
+    return ShortcutsConfiguration(shortcuts: shortcuts, actions: actions);
+  }
+}
+
+class SearchInFileIntent extends Intent {
+  const SearchInFileIntent(this._controller);
+
+  final JsonViewerController _controller;
+}
+
+class SearchInFileAction extends Action<SearchInFileIntent> {
+  @override
+  void invoke(SearchInFileIntent intent) {
+    intent._controller.showOrFocusSearchField();
   }
 }
 

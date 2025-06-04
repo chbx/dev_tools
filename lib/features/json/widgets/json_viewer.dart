@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../shared/theme/theme.dart';
+import '../../../shared/widgets/search/search_field.dart';
+import '../../../shared/widgets/search/search_theme.dart';
+import '../utils/sliver_tree_helper.dart';
 import '../view_model/tree_node_data.dart';
 import 'dynamic_width.dart';
 import 'json_viewer_controller.dart';
@@ -27,21 +33,72 @@ class JsonViewer extends StatelessWidget {
     return ValueListenableBuilder(
       valueListenable: controller.viewDataNotifier,
       builder: (BuildContext context, JsonViewerData value, Widget? child) {
-        final msg = value.errorMessage;
-        if (msg != null) {
-          return Text(msg);
-        }
-        final treeNode = value.treeNode;
-        if (treeNode == null) {
-          return Container();
-        }
-        return InnerJsonViewer(
-          controller: controller,
-          themeData: themeData,
-          textStyle: textStyle,
-          treeNode: treeNode,
+        return Stack(
+          children: [
+            buildJsonViewer(value, textStyle),
+            PositionedPopup(
+              isVisibleListenable: controller.showSearchField,
+              top: denseSpacing,
+              right: 20,
+              child: buildSearchInFileField(),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  Widget buildJsonViewer(JsonViewerData viewData, TextStyle textStyle) {
+    final msg = viewData.errorMessage;
+    final treeNode = viewData.treeNode;
+    if (msg != null) {
+      return Text(msg);
+    } else if (treeNode == null) {
+      return Container();
+    } else {
+      return InnerJsonViewer(
+        controller: controller,
+        themeData: themeData,
+        textStyle: textStyle,
+        treeNode: treeNode,
+      );
+    }
+  }
+
+  Widget buildSearchInFileField() {
+    return Material(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        width: wideSearchFieldWidth,
+        height: themeData.defaultTextFieldHeight + 2 * denseSpacing,
+        // padding: const EdgeInsets.all(denseSpacing),
+        padding: const EdgeInsets.symmetric(
+          horizontal: denseSpacing,
+          vertical: densePadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6.0),
+          border: Border.all(color: Color(0xFFd6d6d6), width: 0.5),
+        ),
+        child: SearchTheme(
+          theme: SearchThemeData(fontSize: themeData.fontSize),
+          child: SearchField<JsonViewerController>(
+            searchController: controller,
+            searchFieldEnabled: true,
+            supportsNavigation: true,
+            // shouldRequestFocus: true,
+            searchFieldWidth: wideSearchFieldWidth,
+            searchFieldBorder: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              gapPadding: 0.0,
+            ),
+            onClose: () => controller.closeSearchField(),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -145,6 +202,7 @@ class _InnerJsonViewerState extends State<InnerJsonViewer>
                         );
                         _maxWidthNotifier.value = maxWidth;
                       },
+                      textStyle: widget.textStyle,
                     ),
                   ),
                 ),
@@ -172,6 +230,8 @@ class _JsonViewerContent extends StatefulWidget {
     required this.treeNode,
     required this.themeData,
     this.onNodeToggle,
+
+    required this.textStyle,
   });
 
   final double height;
@@ -186,11 +246,36 @@ class _JsonViewerContent extends StatefulWidget {
   final JsonViewerThemeData themeData;
   final TreeSliverNodeCallback? onNodeToggle;
 
+  // TODO 更好的方式获取textStyle
+  final TextStyle textStyle;
+
   @override
   State<_JsonViewerContent> createState() => _JsonViewerContentState();
 }
 
 class _JsonViewerContentState extends State<_JsonViewerContent> {
+  @override
+  void initState() {
+    super.initState();
+    widget.jsonViewerController.activeSearchMatch.addListener(
+      _onActiveSearchMatchChange,
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.jsonViewerController.activeSearchMatch.removeListener(
+      _onActiveSearchMatchChange,
+    );
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JsonViewerContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // TODO process _onActiveSearchMatchChange
+  }
+
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
@@ -202,13 +287,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
         TreeSliver(
           tree: [widget.treeNode],
           controller: widget.treeSliverController,
-          treeNodeBuilder: (context, node, animationStyle) {
-            return _JsonViewerLine(
-              node: node as TreeSliverNode<TreeNodeData>,
-              themeData: widget.themeData,
-              treeSliverController: widget.treeSliverController,
-            );
-          },
+          treeNodeBuilder: _treeNodeBuilder,
           treeRowExtentBuilder:
               (node, dimensions) => widget.themeData.defaultRowHeight,
           toggleAnimationStyle: AnimationStyle.noAnimation,
@@ -218,6 +297,159 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
       ],
     );
   }
+
+  Widget _treeNodeBuilder(
+    BuildContext context,
+    TreeSliverNode<Object?> node,
+    AnimationStyle animationStyle,
+  ) {
+    return ListenableBuilder(
+      listenable: widget.jsonViewerController.searchMatches,
+      builder: (context, child) {
+        return ListenableBuilder(
+          listenable: widget.jsonViewerController.activeSearchMatch,
+          builder: (context, child) {
+            return _JsonViewerLine(
+              node: node as TreeSliverNode<TreeNodeData>,
+              themeData: widget.themeData,
+              treeSliverController: widget.treeSliverController,
+              searchMatches: _searchMatchesForLine(node),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<JsonViewFindMatch> _searchMatchesForLine(TreeSliverNode<Object?> node) {
+    // TODO 使用map而不是遍历
+    return widget.jsonViewerController.searchMatches.value
+        .where((searchMatch) => searchMatch.path.data == node)
+        .toList();
+  }
+
+  void _onActiveSearchMatchChange() {
+    _expandAndScroll();
+  }
+
+  void _expandAndScroll() {
+    final activeMatch = widget.jsonViewerController.activeSearchMatch.value;
+    if (activeMatch == null) {
+      return;
+    }
+
+    var toggled = false;
+    final prePath = activeMatch.path.prev;
+    if (prePath != null) {
+      prePath.invokeFromRoot((node) {
+        if (!node.isExpanded) {
+          widget.treeSliverController.toggleNode(node);
+          toggled = true;
+        }
+      });
+    }
+
+    final offsetLines = computeOffsetLines(activeMatch.path);
+
+    if (toggled) {
+      Future.delayed(
+        Duration(milliseconds: 20),
+        () => _maybeScrollToPosition(offsetLines, activeMatch),
+      );
+    } else {
+      _maybeScrollToPosition(offsetLines, activeMatch);
+    }
+  }
+
+  void _maybeScrollToPosition(int? lineNumber, JsonViewFindMatch activeMatch) {
+    _maybeScrollToLine(widget.verticalController, lineNumber);
+    _maybeScrollToColumn(widget.horizontalController, activeMatch);
+  }
+
+  void _maybeScrollToLine(ScrollController scrollController, int? lineNumber) {
+    if (lineNumber == null) return;
+
+    final rowHeight = widget.themeData.defaultRowHeight;
+
+    final isOutOfViewTop =
+        lineNumber * rowHeight < scrollController.offset + rowHeight;
+    final isOutOfViewBottom =
+        lineNumber * rowHeight >
+        scrollController.offset + widget.height - rowHeight;
+
+    if (isOutOfViewTop || isOutOfViewBottom) {
+      // Scroll this search token to the middle of the view.
+      final targetOffset = math.max<double>(
+        lineNumber * rowHeight - widget.height / 2,
+        0.0,
+      );
+      unawaited(
+        scrollController.animateTo(
+          targetOffset,
+          duration: defaultDuration,
+          curve: defaultCurve,
+        ),
+      );
+    }
+  }
+
+  void _maybeScrollToColumn(
+    ScrollController scrollController,
+    JsonViewFindMatch activeMatch,
+  ) {
+    final node = activeMatch.path.data;
+
+    final text = node.content.contactString();
+    final preMatchText = text.substring(0, activeMatch.start);
+
+    final textWidth = calculateTextSpanWidth(
+      TextSpan(text: preMatchText, style: widget.textStyle),
+    );
+    final width =
+        widget.themeData.prefixWidth +
+        // TODO node.depth may be null
+        node.depth! * widget.themeData.indentWidth +
+        textWidth;
+
+    final matchText = text.substring(
+      activeMatch.start,
+      activeMatch.start + activeMatch.length,
+    );
+
+    final matchTextWidth = calculateTextSpanWidth(
+      TextSpan(text: matchText, style: widget.textStyle),
+    );
+
+    final matchHorizontalScrollSpace =
+        widget.themeData.matchHorizontalScrollSpace;
+    double? targetOffset;
+    if (width < scrollController.offset) {
+      // isOutOfViewLeft
+      targetOffset = math.max(width - matchHorizontalScrollSpace, 0.0);
+    } else if (width + matchTextWidth >
+        scrollController.offset + widget.width) {
+      // isOutOfViewRight && !isOutOfViewLeft
+
+      if (matchTextWidth > widget.width) {
+        targetOffset = math.max(width - matchHorizontalScrollSpace, 0.0);
+      } else {
+        targetOffset = math.min(
+          width + matchTextWidth + matchHorizontalScrollSpace - widget.width,
+          scrollController.position.maxScrollExtent,
+        );
+      }
+    }
+
+    if (targetOffset != null) {
+      unawaited(
+        scrollController.animateTo(
+          targetOffset,
+          duration: defaultDuration,
+          curve: defaultCurve,
+        ),
+      );
+    }
+  }
 }
 
 class _JsonViewerLine extends StatelessWidget {
@@ -226,11 +458,13 @@ class _JsonViewerLine extends StatelessWidget {
     required this.themeData,
     required this.node,
     required this.treeSliverController,
+    required this.searchMatches,
   });
 
   final JsonViewerThemeData themeData;
   final TreeSliverNode<TreeNodeData> node;
   final TreeSliverController treeSliverController;
+  final List<JsonViewFindMatch> searchMatches;
 
   @override
   Widget build(BuildContext context) {
@@ -264,7 +498,7 @@ class _JsonViewerLine extends StatelessWidget {
       widgets.add(SizedBox(width: themeData.spaceAfterIcon));
     }
 
-    _buildContent(indentDepth, widgets);
+    _buildContent(indentDepth, widgets, context);
 
     return Row(children: widgets);
   }
@@ -292,9 +526,22 @@ class _JsonViewerLine extends StatelessWidget {
     }
   }
 
-  void _buildContent(int indentDepth, List<Widget> widgets) {
+  void _buildContent(
+    int indentDepth,
+    List<Widget> widgets,
+    BuildContext context,
+  ) {
     final nodeData = node.content;
     final textStyleTheme = themeData.textStyle;
+
+    List<InlineSpan>? nameSpans;
+    final name = nodeData.name;
+    if (name != null) {
+      nameSpans = [
+        TextSpan(text: name, style: textStyleTheme.objectKey),
+        TextSpan(text: ": ", style: textStyleTheme.colon),
+      ];
+    }
 
     final contentStyle = _getContentStyle(
       nodeData.type,
@@ -303,27 +550,21 @@ class _JsonViewerLine extends StatelessWidget {
     );
     if (node.isExpanded || node.children.isEmpty) {
       final spans = <InlineSpan>[];
-      final name = nodeData.name;
-      if (name != null) {
-        spans.add(TextSpan(text: name, style: textStyleTheme.objectKey));
-        spans.add(TextSpan(text: ": ", style: textStyleTheme.colon));
+      if (nameSpans != null) {
+        spans.addAll(nameSpans);
       }
       spans.add(TextSpan(text: nodeData.text, style: contentStyle));
       if (nodeData.comma) {
         spans.add(TextSpan(text: ',', style: textStyleTheme.comma));
       }
-      widgets.add(Text.rich(TextSpan(children: spans)));
+      widgets.add(
+        Text.rich(TextSpan(children: searchAwareLineContents(spans, context))),
+      );
     } else {
-      final name = nodeData.name;
-      if (name != null) {
+      if (nameSpans != null) {
         widgets.add(
           Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: name, style: textStyleTheme.objectKey),
-                TextSpan(text: ": ", style: textStyleTheme.colon),
-              ],
-            ),
+            TextSpan(children: searchAwareLineContents(nameSpans, context)),
           ),
         );
       }
@@ -379,6 +620,95 @@ class _JsonViewerLine extends StatelessWidget {
     }
     return textStyle;
   }
+
+  List<InlineSpan> searchAwareLineContents(
+    List<InlineSpan> spans,
+    BuildContext context,
+  ) {
+    if (searchMatches.isNotEmpty) {
+      for (final match in searchMatches) {
+        final matchColor =
+            match.isActiveSearchMatch
+                ? themeData.color.activeFindMatchBackground
+                : themeData.color.findMatchBackground;
+
+        spans = _contentsWithMatch(spans, match, matchColor, context: context);
+      }
+    }
+    return spans;
+  }
+
+  List<InlineSpan> _contentsWithMatch(
+    List<InlineSpan> startingContents,
+    JsonViewFindMatch match,
+    Color matchColor, {
+    required BuildContext context,
+  }) {
+    final contentsWithMatch = <InlineSpan>[];
+    var startColumnForSpan = 0;
+    for (final span in startingContents) {
+      final spanText = span.toPlainText();
+      // TODO
+      final startColumnForMatch = match.start;
+      if (startColumnForSpan <= startColumnForMatch &&
+          startColumnForSpan + spanText.length > startColumnForMatch) {
+        // The active search is part of this [span].
+        final matchStartInSpan = startColumnForMatch - startColumnForSpan;
+        final matchEndInSpan = matchStartInSpan + match.length;
+
+        // Add the part of [span] that occurs before the search match.
+        contentsWithMatch.add(
+          TextSpan(
+            text: spanText.substring(0, matchStartInSpan),
+            style: span.style,
+          ),
+        );
+
+        final matchStyle = (span.style ?? DefaultTextStyle.of(context).style)
+            .copyWith(color: Colors.black, backgroundColor: matchColor);
+
+        if (matchEndInSpan <= spanText.length) {
+          final matchText = spanText.substring(
+            matchStartInSpan,
+            matchEndInSpan,
+          );
+          final trailingText = spanText.substring(matchEndInSpan);
+          // Add the match and any part of [span] that occurs after the search
+          // match.
+          contentsWithMatch.addAll([
+            TextSpan(text: matchText, style: matchStyle),
+            if (trailingText.isNotEmpty)
+              TextSpan(
+                text: spanText.substring(matchEndInSpan),
+                style: span.style,
+              ),
+          ]);
+        } else {
+          // In this case, the active search match exists across multiple spans,
+          // so we need to add the part of the match that is in this [span] and
+          // continue looking for the remaining part of the match in the spans
+          // to follow.
+          contentsWithMatch.add(
+            TextSpan(
+              text: spanText.substring(matchStartInSpan),
+              style: matchStyle,
+            ),
+          );
+          final remainingMatchLength =
+              match.length - (spanText.length - matchStartInSpan);
+          match = JsonViewFindMatch(
+            path: match.path,
+            start: startColumnForMatch + match.length - remainingMatchLength,
+            end: startColumnForMatch + match.length,
+          );
+        }
+      } else {
+        contentsWithMatch.add(span);
+      }
+      startColumnForSpan += spanText.length;
+    }
+    return contentsWithMatch;
+  }
 }
 
 class _SimpleButton extends StatelessWidget {
@@ -400,6 +730,35 @@ class _SimpleButton extends StatelessWidget {
         mouseCursor: cursor,
         child: GestureDetector(onTap: onPressed, child: child),
       ),
+    );
+  }
+}
+
+class PositionedPopup extends StatelessWidget {
+  const PositionedPopup({
+    super.key,
+    required this.isVisibleListenable,
+    required this.child,
+    this.top,
+    this.left,
+    this.right,
+  });
+
+  final ValueListenable<bool> isVisibleListenable;
+  final double? top;
+  final double? left;
+  final double? right;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: isVisibleListenable,
+      builder: (context, isVisible, _) {
+        return isVisible
+            ? Positioned(top: top, left: left, right: right, child: child)
+            : const SizedBox.shrink();
+      },
     );
   }
 }

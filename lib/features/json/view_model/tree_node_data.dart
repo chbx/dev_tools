@@ -43,6 +43,19 @@ class TreeNodeData {
     required this.isNameAllAscii,
     required this.isTextAllAscii,
   });
+
+  String contactString() {
+    String result;
+    if (name != null) {
+      result = '$name: $text';
+    } else {
+      result = text;
+    }
+    if (comma) {
+      result += ',';
+    }
+    return result;
+  }
 }
 
 TreeSliverNode<TreeNodeData> buildTreeNodes(

@@ -1,8 +1,8 @@
 import 'package:flutter/widgets.dart';
 
-const unscaledDefaultFontSize = 14.0;
+import '../../../shared/theme/theme.dart';
 
-class JsonViewerThemeData {
+class JsonViewerThemeData with ScaleByFontThemeBase {
   JsonViewerThemeData({
     required this.color,
     required this.prefixWidth,
@@ -10,6 +10,7 @@ class JsonViewerThemeData {
     this.fontFamily,
     required this.fontSize,
     required this.spaceAfterIcon,
+    this.matchHorizontalScrollSpace = largeSpacing,
   }) : iconBoxSize = fontSize,
        iconSize = fontSize - 4,
        textStyle = _buildTextStyle(color);
@@ -20,20 +21,15 @@ class JsonViewerThemeData {
   final double prefixWidth;
   final double indentWidth;
 
-  final String? fontFamily;
+  @override
   final double fontSize;
+  final String? fontFamily;
 
   final double iconBoxSize;
   final double iconSize;
   final double spaceAfterIcon;
 
-  get defaultRowHeight => scaleByFontFactor(20.0);
-
-  double scaleByFontFactor(double original) {
-    final themFontSize = fontSize;
-    return (original * (themFontSize / unscaledDefaultFontSize))
-        .roundToDouble();
-  }
+  final double matchHorizontalScrollSpace;
 
   static _buildTextStyle(JsonViewerColorTheme color) {
     return JsonViewerTextStyle(
@@ -94,6 +90,8 @@ class JsonViewerColorTheme {
     required this.indentLine,
     required this.foldForeground,
     required this.foldBackground,
+    required this.findMatchBackground,
+    required this.activeFindMatchBackground,
   });
 
   final Color objectKey;
@@ -106,6 +104,8 @@ class JsonViewerColorTheme {
   final Color indentLine;
   final Color foldForeground;
   final Color foldBackground;
+  final Color findMatchBackground;
+  final Color activeFindMatchBackground;
 }
 
 const Color _defaultIndentLineColor = Color(0xFFd3d3d3);
@@ -120,6 +120,8 @@ const defaultColorThemeData = JsonViewerColorTheme(
   indentLine: _defaultIndentLineColor,
   foldForeground: Color(0xFF808080),
   foldBackground: Color.fromRGBO(0xd4, 0xd4, 0xd4, 0.25),
+  findMatchBackground: Color.fromRGBO(234, 92, 0, 0.33),
+  activeFindMatchBackground: Color(0xFFa8ac94),
 );
 
 final defaultTheme = JsonViewerThemeData(
