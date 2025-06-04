@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_test_helper.dart';
+
 void main() {
   testWidgets('JsonViewer Search', (WidgetTester tester) async {
     final json =
@@ -45,7 +47,7 @@ void main() {
     await tester.pump();
     expect(controller.searchMatches.value.length, 4);
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         [tester.widget<Text>(find.text('"key-1": "value-1",'))],
         searchText,
         activeBackground,
@@ -53,7 +55,7 @@ void main() {
       1,
     );
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         tester.widgetList<Text>(allContentTextFinder).toList(),
         searchText,
         matchBackground,
@@ -65,7 +67,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.keyboard_arrow_down));
     await tester.pump();
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         [tester.widget<Text>(find.text('"key-2-1": "value-2-1",'))],
         searchText,
         activeBackground,
@@ -73,7 +75,7 @@ void main() {
       1,
     );
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         tester.widgetList<Text>(allContentTextFinder).toList(),
         searchText,
         matchBackground,
@@ -89,7 +91,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.keyboard_arrow_down));
     await tester.pump();
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         [tester.widget<Text>(find.text('"key-2-2": "value-2-2",'))],
         searchText,
         activeBackground,
@@ -97,7 +99,7 @@ void main() {
       1,
     );
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         tester.widgetList<Text>(allContentTextFinder).toList(),
         searchText,
         matchBackground,
@@ -109,7 +111,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.keyboard_arrow_up));
     await tester.pump();
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         [tester.widget<Text>(find.text('"key-2-1": "value-2-1",'))],
         searchText,
         activeBackground,
@@ -117,7 +119,7 @@ void main() {
       1,
     );
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         tester.widgetList<Text>(allContentTextFinder).toList(),
         searchText,
         matchBackground,
@@ -131,7 +133,7 @@ void main() {
     await tester.pump();
     expect(controller.searchMatches.value.length, 3);
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         tester.widgetList<Text>(allContentTextFinder).toList(),
         searchText2,
         activeBackground,
@@ -139,7 +141,7 @@ void main() {
       1,
     );
     expect(
-      _countTextWidgets(
+      countTextWidgets(
         tester.widgetList<Text>(allContentTextFinder).toList(),
         searchText2,
         matchBackground,
@@ -152,38 +154,4 @@ void main() {
     await tester.pump();
     expect(searchFieldFinder, findsNothing);
   });
-}
-
-int _countTextWidgets(Iterable<Text> textWidgets, String text, Color color) {
-  int count = 0;
-  for (final textWidget in textWidgets) {
-    if (textWidget.data != null) {
-      if (text == textWidget.data &&
-          textWidget.style?.backgroundColor == color) {
-        count += 1;
-      }
-    } else if (textWidget.textSpan != null) {
-      count += _countTextSpans(textWidget.textSpan!, text, color);
-    }
-  }
-  return count;
-}
-
-int _countTextSpans(InlineSpan textSpan, String text, Color color) {
-  if (textSpan is! TextSpan) {
-    return 0;
-  }
-  if (textSpan.children != null) {
-    int count = 0;
-    for (final childSpan in textSpan.children!) {
-      count += _countTextSpans(childSpan, text, color);
-    }
-    return count;
-  } else {
-    if (textSpan.text == text && textSpan.style?.backgroundColor == color) {
-      return 1;
-    } else {
-      return 0;
-    }
-  }
 }

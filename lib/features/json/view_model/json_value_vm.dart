@@ -11,7 +11,7 @@ sealed class JsonValueVM {
       case JsonBool():
         return JsonBoolVM(value.value);
       case JsonString():
-        return _convertJsonString(value.rawText);
+        return _convertJsonString(value);
       case JsonNumber():
         return _convertJsonNumber(value);
       case JsonArray():
@@ -24,15 +24,19 @@ sealed class JsonValueVM {
     }
   }
 
-  static JsonStringVM _convertJsonString(String rawText) {
+  static JsonStringVM _convertJsonString(JsonString value) {
     bool allAscii = true;
-    for (int i = 0; i < rawText.length; i++) {
-      if (rawText.codeUnitAt(i) > 127) {
+    for (int i = 0; i < value.rawText.length; i++) {
+      if (value.rawText.codeUnitAt(i) > 127) {
         allAscii = false;
         break;
       }
     }
-    return JsonStringVM(rawText: rawText, allAscii: allAscii);
+    return JsonStringVM(
+      rawText: value.rawText,
+      allAscii: allAscii,
+      value: value.value,
+    );
   }
 
   static JsonNumberVM _convertJsonNumber(JsonNumber value) {
@@ -42,9 +46,7 @@ sealed class JsonValueVM {
   static JsonObjectVM _convertNormalObject(NormalJsonObject value) {
     final newMap = LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM>();
     value.entryMap.forEach((entryKey, entryValue) {
-      final newKey = JsonObjectKeyStringVM(
-        _convertJsonString(entryKey.value.rawText),
-      );
+      final newKey = JsonObjectKeyStringVM(_convertJsonString(entryKey.value));
       newMap[newKey] = from(entryValue);
     });
     return NormalJsonObjectVM(entryMap: newMap);
@@ -55,7 +57,7 @@ sealed class JsonValueVM {
     value.entryMap.forEach((entryKey, entryValue) {
       final newKey = switch (entryKey) {
         JsonObjectKeyString() => JsonObjectKeyStringVM(
-          _convertJsonString(entryKey.value.rawText),
+          _convertJsonString(entryKey.value),
         ),
         JsonObjectKeyNumber() => JsonObjectKeyNumberVM(
           _convertJsonNumber(entryKey.value),
@@ -230,8 +232,10 @@ class JsonBoolVM implements JsonValueVM {
 class JsonStringVM implements JsonValueVM {
   final String rawText;
   final bool allAscii;
+  final String? value;
+  JsonValueVM? parsed;
 
-  JsonStringVM({required this.rawText, required this.allAscii});
+  JsonStringVM({required this.rawText, required this.allAscii, this.value});
 
   @override
   bool operator ==(Object other) {

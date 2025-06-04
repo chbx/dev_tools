@@ -1,5 +1,5 @@
 import 'package:dev_tools/features/json/model/tree_path.dart';
-import 'package:dev_tools/features/json/utils/sliver_tree_helper.dart';
+import 'package:dev_tools/features/json/service/sliver_tree_helper.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 

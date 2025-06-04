@@ -8,12 +8,14 @@ import 'package:flutter/rendering.dart';
 import '../../../shared/theme/theme.dart';
 import '../../../shared/widgets/search/search_field.dart';
 import '../../../shared/widgets/search/search_theme.dart';
-import '../utils/sliver_tree_helper.dart';
+import '../service/sliver_tree_helper.dart';
 import '../view_model/tree_node_data.dart';
 import 'dynamic_width.dart';
 import 'json_viewer_controller.dart';
 import 'json_viewer_theme.dart';
 import 'text_width.dart';
+
+const _colonSpace = ': ';
 
 class JsonViewer extends StatelessWidget {
   const JsonViewer({
@@ -338,27 +340,26 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
       return;
     }
 
-    var toggled = false;
-    final prePath = activeMatch.path.prev;
+    final currentPath = activeMatch.path;
+    final nameLen = currentPath.data.content.name?.length ?? 0;
+    if (activeMatch.end > nameLen + _colonSpace.length) {
+      final currentNode = currentPath.data;
+      if (currentNode.isExpanded) {
+        widget.treeSliverController.toggleNode(currentPath.data);
+      }
+    }
+    final prePath = currentPath.prev;
     if (prePath != null) {
       prePath.invokeFromRoot((node) {
         if (!node.isExpanded) {
           widget.treeSliverController.toggleNode(node);
-          toggled = true;
         }
       });
     }
 
     final offsetLines = computeOffsetLines(activeMatch.path);
 
-    if (toggled) {
-      Future.delayed(
-        Duration(milliseconds: 20),
-        () => _maybeScrollToPosition(offsetLines, activeMatch),
-      );
-    } else {
-      _maybeScrollToPosition(offsetLines, activeMatch);
-    }
+    _maybeScrollToPosition(offsetLines, activeMatch);
   }
 
   void _maybeScrollToPosition(int? lineNumber, JsonViewFindMatch activeMatch) {
@@ -539,7 +540,7 @@ class _JsonViewerLine extends StatelessWidget {
     if (name != null) {
       nameSpans = [
         TextSpan(text: name, style: textStyleTheme.objectKey),
-        TextSpan(text: ": ", style: textStyleTheme.colon),
+        TextSpan(text: _colonSpace, style: textStyleTheme.colon),
       ];
     }
 
@@ -548,19 +549,10 @@ class _JsonViewerLine extends StatelessWidget {
       indentDepth,
       textStyleTheme,
     );
-    if (node.isExpanded || node.children.isEmpty) {
-      final spans = <InlineSpan>[];
-      if (nameSpans != null) {
-        spans.addAll(nameSpans);
-      }
-      spans.add(TextSpan(text: nodeData.text, style: contentStyle));
-      if (nodeData.comma) {
-        spans.add(TextSpan(text: ',', style: textStyleTheme.comma));
-      }
-      widgets.add(
-        Text.rich(TextSpan(children: searchAwareLineContents(spans, context))),
-      );
-    } else {
+
+    if (!node.isExpanded &&
+        node.children.isNotEmpty &&
+        nodeData.parsedStart == null) {
       if (nameSpans != null) {
         widgets.add(
           Text.rich(
@@ -589,6 +581,31 @@ class _JsonViewerLine extends StatelessWidget {
       if (nodeData.tail?.comma == true) {
         widgets.add(Text(',', style: textStyleTheme.comma));
       }
+    } else {
+      // TODO 样式 && 宽度计算
+      final List<InlineSpan> spans = nameSpans ?? <InlineSpan>[];
+
+      if (node.isExpanded && nodeData.parsedStart != null) {
+        spans.add(
+          TextSpan(
+            text: nodeData.parsedStart,
+            style: _getContentStyle(
+              nodeData.parsedType!,
+              indentDepth,
+              textStyleTheme,
+            ),
+          ),
+        );
+      } else {
+        spans.add(TextSpan(text: nodeData.text, style: contentStyle));
+        if (nodeData.comma) {
+          spans.add(TextSpan(text: ',', style: textStyleTheme.comma));
+        }
+      }
+
+      widgets.add(
+        Text.rich(TextSpan(children: searchAwareLineContents(spans, context))),
+      );
     }
   }
 

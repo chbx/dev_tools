@@ -16,7 +16,7 @@ class JsonParseOptions {
   // TODO allow unquoted field names
   final bool allowExtendedKeyType;
 
-  JsonParseOptions.strict({
+  const JsonParseOptions.strict({
     this.backSlashEscapeType = BackSlashEscapeType.escapeAll,
     this.allowBackSlashEscapingAnyCharacter = false,
     this.allowUnquotedControlChars = false,
@@ -24,7 +24,7 @@ class JsonParseOptions {
     this.allowExtendedKeyType = false,
   });
 
-  JsonParseOptions.loose({
+  const JsonParseOptions.loose({
     this.backSlashEscapeType = BackSlashEscapeType.escapeAll,
     this.allowBackSlashEscapingAnyCharacter = true,
     this.allowUnquotedControlChars = true,

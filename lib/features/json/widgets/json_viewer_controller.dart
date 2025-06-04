@@ -7,36 +7,87 @@ import '../../../shared/widgets/search/search_controller.dart';
 import '../core/json_parser.dart';
 import '../core/json_parser_options.dart';
 import '../model/tree_path.dart';
+import '../model/viewer_options.dart';
+import '../service/display_opt.dart';
 import '../view_model/json_value_vm.dart';
 import '../view_model/tree_node_data.dart';
 
 class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
-  JsonViewerController({String text = ''}) {
+  JsonViewerController({
+    String text = '',
+    this.options = const JsonViewerOptions(),
+  }) {
     this.text = text;
     initSearch();
   }
 
   void dispose() {
-    viewDataNotifier.dispose();
+    _viewDataNotifier.dispose();
     _showSearchField.dispose();
     disposeSearch();
   }
 
-  final viewDataNotifier = ValueNotifier(JsonViewerData(text: ''));
+  final JsonViewerOptions options;
+
+  ValueListenable<JsonViewerData> get viewDataNotifier => _viewDataNotifier;
+  final _viewDataNotifier = ValueNotifier(JsonViewerData(text: ''));
 
   set text(String text) {
-    if (text == viewDataNotifier.value.text) {
+    if (text == _viewDataNotifier.value.text) {
       return;
     }
     // TODO 异步
     final viewData = _parse(text);
-    viewDataNotifier.value = viewData;
+    _viewDataNotifier.value = viewData;
 
     refreshSearchMatches();
   }
 
+  JsonViewerData _parse(String text) {
+    JsonValueVM? jsonValueVM;
+    String? errorMessage;
+    try {
+      if (text.isNotEmpty) {
+        final jsonValue = JsonParser.parse(
+          text,
+          options: JsonParseOptions.loose(
+            backSlashEscapeType:
+                BackSlashEscapeType.onlyBackSlashAndDoubleQuote,
+          ),
+        );
+        jsonValueVM = JsonValueVM.from(jsonValue);
+        JsonValueDisplayOptimizer(options: options).processTree(jsonValueVM);
+      }
+    } catch (e, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: e, stack: stackTrace),
+      );
+      errorMessage = '解析异常';
+    }
+
+    if (options.autoParsedRootString &&
+        jsonValueVM is JsonStringVM &&
+        jsonValueVM.parsed != null) {
+      jsonValueVM = jsonValueVM.parsed!;
+    }
+
+    TreeSliverNode<TreeNodeData>? treeNode;
+    if (jsonValueVM != null) {
+      treeNode = buildTreeNodes(jsonValueVM);
+    }
+
+    final viewData = JsonViewerData(
+      text: text,
+      jsonValueVM: jsonValueVM,
+      treeNode: treeNode,
+      errorMessage: errorMessage,
+    );
+
+    return viewData;
+  }
+
   String? getTextContent() {
-    final jsonValue = viewDataNotifier.value.jsonValueVM;
+    final jsonValue = _viewDataNotifier.value.jsonValueVM;
     if (jsonValue == null) {
       return null;
     }
@@ -53,14 +104,14 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   }
 
   void _rebuildViewData({required bool defaultExpand}) {
-    final previousValue = viewDataNotifier.value;
+    final previousValue = _viewDataNotifier.value;
     final previousTreeNode = previousValue.treeNode;
     if (previousTreeNode != null) {
-      final newTreeNode = _rebuildSliverTree(
+      final newTreeNode = rebuildSliverTree(
         previousTreeNode,
         defaultExpand: defaultExpand,
       );
-      viewDataNotifier.value = JsonViewerData(
+      _viewDataNotifier.value = JsonViewerData(
         text: previousValue.text,
         jsonValueVM: previousValue.jsonValueVM,
         treeNode: newTreeNode,
@@ -112,26 +163,6 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
     return newPath;
   }
 
-  TreeSliverNode<TreeNodeData> _rebuildSliverTree(
-    TreeSliverNode<TreeNodeData> tree, {
-    required bool defaultExpand,
-  }) {
-    final List<TreeSliverNode<TreeNodeData>> children;
-    if (tree.children.isNotEmpty) {
-      children =
-          tree.children
-              .map((c) => _rebuildSliverTree(c, defaultExpand: defaultExpand))
-              .toList();
-    } else {
-      children = tree.children;
-    }
-    return TreeSliverNode(
-      tree.content,
-      children: children,
-      expanded: defaultExpand,
-    );
-  }
-
   ValueListenable<bool> get showSearchField => _showSearchField;
   final _showSearchField = ValueNotifier<bool>(false);
 
@@ -157,7 +188,7 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
     String search, {
     bool searchPreviousMatches = false,
   }) {
-    final treeNode = viewDataNotifier.value.treeNode;
+    final treeNode = _viewDataNotifier.value.treeNode;
 
     if (treeNode == null) {
       return [];
@@ -205,12 +236,27 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
     String search,
     List<JsonViewFindMatch> allMatches,
   ) {
-    String text = path.data.content.contactString();
+    final nodeData = path.data.content;
+    final name = nodeData.name;
+    final nameLen = name?.length ?? 0;
 
+    if (!options.searchNestedRawString &&
+        name == null &&
+        nodeData.parsedStart != null) {
+      return;
+    }
+
+    String text = nodeData.contactString();
     text = text.toLowerCase();
 
     final matches = search.allMatches(text);
     for (final match in matches) {
+      if (!options.searchNestedRawString && nodeData.parsedStart != null) {
+        if (match.start > nameLen) {
+          return;
+        }
+      }
+
       allMatches.add(
         JsonViewFindMatch(start: match.start, end: match.end, path: path),
       );
@@ -219,41 +265,6 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
 
   @override
   void onMatchChanged(int index, bool fromNavigation) {}
-}
-
-JsonViewerData _parse(String text) {
-  JsonValueVM? jsonValueVM;
-  String? errorMessage;
-  try {
-    if (text.isNotEmpty) {
-      final jsonValue = JsonParser.parse(
-        text,
-        options: JsonParseOptions.loose(
-          backSlashEscapeType: BackSlashEscapeType.onlyBackSlashAndDoubleQuote,
-        ),
-      );
-      jsonValueVM = JsonValueVM.from(jsonValue);
-    }
-  } catch (e, stackTrace) {
-    FlutterError.reportError(
-      FlutterErrorDetails(exception: e, stack: stackTrace),
-    );
-    errorMessage = '解析异常';
-  }
-
-  TreeSliverNode<TreeNodeData>? treeNode;
-  if (jsonValueVM != null) {
-    treeNode = buildTreeNodes(jsonValueVM);
-  }
-
-  final viewData = JsonViewerData(
-    text: text,
-    jsonValueVM: jsonValueVM,
-    treeNode: treeNode,
-    errorMessage: errorMessage,
-  );
-
-  return viewData;
 }
 
 class JsonViewerData {

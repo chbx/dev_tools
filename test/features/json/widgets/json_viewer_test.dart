@@ -11,38 +11,40 @@ import 'package:dev_tools/features/json/widgets/text_width.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '_test_helper.dart';
+
 void main() {
-  const jsonString =
-      '{'
-      '"array-0":[],'
-      '"array-1":[""],'
-      '"array-2":[true,false],'
-      '"array-3":["content-1","content-2","content-3"],'
-      '"literal":[true,false,null],'
-      '"object-0":{},'
-      '"object-1":{"key-1":"content-1"},'
-      '"object-2":{"":"","key-1":"content-1"},'
-      '"nested-emptyObjectInArray":[{}],'
-      '"nested-objectInArray":[{"key":"value"}],'
-      '"numbers":[0,-1,1,234,1e2,23e-4,1.234,1.23e2],'
-      r'"strings":["","a","ab","\\","\"","\t"]'
-      '}';
-
-  const extendedJsonObject =
-      '{'
-      '"key":"value",'
-      'true:"key-bool-true",'
-      'false:"key-bool-false",'
-      'null:"key-null",'
-      '123:"key-num-int",'
-      '"array":[],'
-      '{}:"empty object key",'
-      '{"key-depth-1":"foo"}:"object key",'
-      '{{"key-depth-2":"foo"}:["bar",{}]}:"nested object key",'
-      '"normal-key-2":{}'
-      '}';
-
   group('Widget - JsonViewer', () {
+    const jsonString =
+        '{'
+        '"array-0":[],'
+        '"array-1":[""],'
+        '"array-2":[true,false],'
+        '"array-3":["content-1","content-2","content-3"],'
+        '"literal":[true,false,null],'
+        '"object-0":{},'
+        '"object-1":{"key-1":"content-1"},'
+        '"object-2":{"":"","key-1":"content-1"},'
+        '"nested-emptyObjectInArray":[{}],'
+        '"nested-objectInArray":[{"key":"value"}],'
+        '"numbers":[0,-1,1,234,1e2,23e-4,1.234,1.23e2],'
+        r'"strings":["","a","ab","\\","\"","\t"]'
+        '}';
+
+    const extendedJsonObject =
+        '{'
+        '"key":"value",'
+        'true:"key-bool-true",'
+        'false:"key-bool-false",'
+        'null:"key-null",'
+        '123:"key-num-int",'
+        '"array":[],'
+        '{}:"empty object key",'
+        '{"key-depth-1":"foo"}:"object key",'
+        '{{"key-depth-2":"foo"}:["bar",{}]}:"nested object key",'
+        '"normal-key-2":{}'
+        '}';
+
     final jsonViewerContentTestcases = [
       ("Normal Json Value", jsonString),
       ("Extended Object", extendedJsonObject),
@@ -60,25 +62,10 @@ void main() {
           ),
         );
 
-        final buffer = StringBuffer();
-        final widgets = tester.widgetList(
-          find.descendant(
-            of: find.byType(InnerJsonViewer),
-            matching: find.byType(Text),
-          ),
-        );
-        for (final widget in widgets) {
-          if (widget is Text) {
-            buffer.write(widget.textSpan!.toPlainText());
-          }
-        }
-
+        final contentText = getViewerContent(tester);
         expect(
           JsonValue.toJsonString(
-            JsonParser.parse(
-              buffer.toString(),
-              options: JsonParseOptions.loose(),
-            ),
+            JsonParser.parse(contentText, options: JsonParseOptions.loose()),
           ),
           json,
         );

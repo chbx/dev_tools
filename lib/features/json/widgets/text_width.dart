@@ -223,7 +223,14 @@ class _TextWidthCacheComputer {
 
       double expend = expendableCommonWidth;
       double fold = expendableCommonWidth;
-      if (nodeData.type == TreeNodeDataType.arrayStart) {
+      if(nodeData.parsedStart != null) {
+        // TODO 判断是否all ascii
+        expend += startArrayWidth;
+        fold += calculateTextWidth(nodeData.text);
+        if (nodeData.comma) {
+          fold += commaWidth;
+        }
+      } else if (nodeData.type == TreeNodeDataType.arrayStart) {
         expend += startArrayWidth;
         fold += arrayFoldWidth;
       } else if (nodeData.type == TreeNodeDataType.objectStart) {
