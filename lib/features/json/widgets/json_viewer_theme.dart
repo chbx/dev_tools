@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../../../shared/theme/theme.dart';
 
@@ -80,6 +80,7 @@ class JsonViewerTextStyle {
 
 class JsonViewerColorTheme {
   const JsonViewerColorTheme({
+    required this.background,
     required this.objectKey,
     required this.string,
     required this.literal,
@@ -94,6 +95,7 @@ class JsonViewerColorTheme {
     required this.activeFindMatchBackground,
   });
 
+  final Color background;
   final Color objectKey;
   final Color string;
   final Color literal;
@@ -110,6 +112,7 @@ class JsonViewerColorTheme {
 
 const Color _defaultIndentLineColor = Color(0xFFd3d3d3);
 const defaultColorThemeData = JsonViewerColorTheme(
+  background: Colors.white,
   objectKey: Color(0xFF0451a5),
   string: Color(0xFFa31515),
   literal: Color(0xFF0000ff),

@@ -237,6 +237,10 @@ class JsonStringVM implements JsonValueVM {
 
   JsonStringVM({required this.rawText, required this.allAscii, this.value});
 
+  String getStringValue() {
+    return value ?? rawText.substring(1, rawText.length - 1);
+  }
+
   @override
   bool operator ==(Object other) {
     return other is JsonStringVM && other.rawText == rawText;
@@ -294,6 +298,9 @@ sealed class JsonObjectVM implements JsonValueVM {}
 
 class NormalJsonObjectVM implements JsonObjectVM, JsonValueVM {
   final LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM> entryMap;
+
+  // fastjson {"$ref": ""}
+  JsonValueVM? ref;
 
   NormalJsonObjectVM({required this.entryMap});
 

@@ -1,60 +1,7 @@
+import '_ascii.dart';
 import 'json_parser_options.dart';
 import 'json_value.dart';
 import 'string_scanner.dart';
-
-class _ASCII {
-  // @formatter:off
-  // dart format off
-  static const tab = 0x09;            // \t
-  static const newline = 0x0A;        // \n
-  static const carriageReturn = 0x0D; // \r
-  static const space = 0x20;          // ' '
-  static const doubleQuote = 0x22;    // "
-  static const plus = 0x2B;           // +
-  static const comma = 0x2C;          // ,
-  static const minus = 0x2D;          // -
-  static const dot = 0x2E;            // .
-  static const slash = 0x2F;          // /
-  static const char0 = 0x30;          // 0
-  static const char1 = 0x31;          // 1
-  static const char2 = 0x32;
-  static const char3 = 0x33;
-  static const char4 = 0x34;
-  static const char5 = 0x35;
-  static const char6 = 0x36;
-  static const char7 = 0x37;
-  static const char8 = 0x38;
-  static const char9 = 0x39;          // 9
-  static const semiColon = 0x3A;      // :
-  static const char_A = 0x41;
-  static const char_E = 0x45;
-  static const char_F = 0x46;
-  static const char_Z = 0x5A;
-  static const arrayOpen = 0x5B;      // [
-  static const backSlash = 0x5C;      // \
-  static const arrayClose = 0x5D;     // ]
-  static const char_a = 0x61;
-  static const char_b = 0x62;
-  static const char_z = 0x7A;
-  static const char_e = 0x65;
-  static const char_f = 0x66;
-  static const char_l = 0x6C;
-  static const char_n = 0x6e;
-  static const char_r = 0x72;
-  static const char_s = 0x73;
-  static const char_t = 0x74;
-  static const char_u = 0x75;
-  static const objectOpen = 0x7B;     // {
-  static const objectClose = 0x7D;    // }
-  // dart format on
-  // @formatter:on
-
-  static bool isOneNine(int char) => char >= char1 && char <= char9;
-
-  static bool isZeroNine(int char) => char >= char0 && char <= char9;
-
-  static bool isCharE(int char) => char == char_e || char == char_E;
-}
 
 enum TokenType {
   startObject,
@@ -122,39 +69,39 @@ class JsonTokenizer {
     final start = _scanner.position;
 
     switch (char) {
-      case _ASCII.objectOpen:
+      case ASCII.objectOpen:
         return _parseSymbolToken(start, TokenType.startObject);
-      case _ASCII.objectClose:
+      case ASCII.objectClose:
         return _parseSymbolToken(start, TokenType.endObject);
-      case _ASCII.arrayOpen:
+      case ASCII.lbracket:
         return _parseSymbolToken(start, TokenType.startArray);
-      case _ASCII.arrayClose:
+      case ASCII.rbracket:
         return _parseSymbolToken(start, TokenType.endArray);
-      case _ASCII.semiColon: // ':'
+      case ASCII.semiColon: // ':'
         return _parseSymbolToken(start, TokenType.colon);
-      case _ASCII.comma:
+      case ASCII.comma:
         return _parseSymbolToken(start, TokenType.comma);
-      case _ASCII.doubleQuote:
+      case ASCII.doubleQuote:
         return _parseStringToken(start);
-      case _ASCII.minus:
+      case ASCII.minus:
         return _parseNumberTokenMinus(start);
-      case _ASCII.char0:
+      case ASCII.char0:
         return _parseNumberTokenZero(start);
-      case _ASCII.char1:
-      case _ASCII.char2:
-      case _ASCII.char3:
-      case _ASCII.char4:
-      case _ASCII.char5:
-      case _ASCII.char6:
-      case _ASCII.char7:
-      case _ASCII.char8:
-      case _ASCII.char9:
+      case ASCII.char1:
+      case ASCII.char2:
+      case ASCII.char3:
+      case ASCII.char4:
+      case ASCII.char5:
+      case ASCII.char6:
+      case ASCII.char7:
+      case ASCII.char8:
+      case ASCII.char9:
         return _parseNumberTokenOneNine(start);
-      case _ASCII.char_t:
+      case ASCII.char_t:
         return _parseTrueToken(start);
-      case _ASCII.char_f:
+      case ASCII.char_f:
         return _parseFalseToken(start);
-      case _ASCII.char_n:
+      case ASCII.char_n:
         return _parseNullToken(start);
       default:
         throw FormatException(
@@ -167,12 +114,12 @@ class JsonTokenizer {
   int? _skipWhitespaceAndGet() {
     while (!_scanner.isDone) {
       final char = _get();
-      if (char == _ASCII.space ||
-          char == _ASCII.tab ||
-          char == _ASCII.newline ||
-          char == _ASCII.carriageReturn) {
+      if (char == ASCII.space ||
+          char == ASCII.tab ||
+          char == ASCII.newline ||
+          char == ASCII.carriageReturn) {
         _consume();
-      } else if (char <= _ASCII.space) {
+      } else if (char <= ASCII.space) {
         if (options.allowControlCharsInSpace) {
           _consume();
         } else {
@@ -201,8 +148,8 @@ class JsonTokenizer {
 
     StringBuffer? buffer;
     int char;
-    while (!_scanner.isDone && (char = _get()) != _ASCII.doubleQuote) {
-      if (char == _ASCII.backSlash) {
+    while (!_scanner.isDone && (char = _get()) != ASCII.doubleQuote) {
+      if (char == ASCII.backSlash) {
         buffer ??= StringBuffer(_scanner.substring(start + 1));
 
         _consume(); // '\'
@@ -212,42 +159,42 @@ class JsonTokenizer {
 
         final escapeChar = _get();
         switch (escapeChar) {
-          case _ASCII.doubleQuote:
+          case ASCII.doubleQuote:
             buffer.write('"');
             _consume();
             break;
-          case _ASCII.backSlash:
+          case ASCII.backSlash:
             buffer.write('\\');
             _consume();
             break;
-          case _ASCII.slash:
+          case ASCII.slash:
             buffer.write('/');
             _consume();
             break;
           default:
             if (options.backSlashEscapeType == BackSlashEscapeType.escapeAll) {
               switch (escapeChar) {
-                case _ASCII.char_b:
+                case ASCII.char_b:
                   buffer.write('\b');
                   _consume();
                   break;
-                case _ASCII.char_f:
+                case ASCII.char_f:
                   buffer.write('\f');
                   _consume();
                   break;
-                case _ASCII.char_n:
+                case ASCII.char_n:
                   buffer.write('\n');
                   _consume();
                   break;
-                case _ASCII.char_r:
+                case ASCII.char_r:
                   buffer.write('\r');
                   _consume();
                   break;
-                case _ASCII.char_t:
+                case ASCII.char_t:
                   buffer.write('\t');
                   _consume();
                   break;
-                case _ASCII.char_u: // \uXXXX - Unicode
+                case ASCII.char_u: // \uXXXX - Unicode
                   _consume(); // 跳过 'u'
 
                   if (!_scanner.hasMore(4)) {
@@ -279,7 +226,7 @@ class JsonTokenizer {
                   break;
                 default:
                   if (options.allowBackSlashEscapingAnyCharacter) {
-                    buffer.writeCharCode(_ASCII.backSlash);
+                    buffer.writeCharCode(ASCII.backSlash);
                     buffer.writeCharCode(escapeChar);
                     _consume();
                   } else {
@@ -289,15 +236,14 @@ class JsonTokenizer {
                   }
               }
             } else {
-              buffer.writeCharCode(_ASCII.backSlash);
+              buffer.writeCharCode(ASCII.backSlash);
               buffer.writeCharCode(escapeChar);
               _consume();
             }
             break;
         }
       } else {
-        if (!options.allowBackSlashEscapingAnyCharacter &&
-            char < _ASCII.space) {
+        if (!options.allowBackSlashEscapingAnyCharacter && char < ASCII.space) {
           throw Exception(
             'Illegal unquoted character (code: $char): has to be escaped'
             ' using backslash to be included in string value',
@@ -329,9 +275,9 @@ class JsonTokenizer {
       throw FormatException("Invalid number format at position $start");
     }
     final char = _get();
-    if (char == _ASCII.char0) {
+    if (char == ASCII.char0) {
       return _parseNumberTokenZero(start);
-    } else if (_ASCII.isOneNine(char)) {
+    } else if (ASCII.isOneNine(char)) {
       return _parseNumberTokenOneNine(start);
     } else {
       throw FormatException("Invalid number format at position $start");
@@ -342,13 +288,13 @@ class JsonTokenizer {
     _consume(); // '0'
     if (!_scanner.isDone) {
       final char = _get();
-      if (_ASCII.isOneNine(char)) {
+      if (ASCII.isOneNine(char)) {
         throw FormatException(
           "Invalid leading zero in number at position $start",
         );
-      } else if (char == _ASCII.dot) {
+      } else if (char == ASCII.dot) {
         return _parseNumberTokenPartDot(start);
-      } else if (_ASCII.isCharE(char)) {
+      } else if (ASCII.isCharE(char)) {
         return _parseNumberTokenPartE(start);
       }
     }
@@ -366,11 +312,11 @@ class JsonTokenizer {
     _consume();
     while (!_scanner.isDone) {
       final char = _get();
-      if (_ASCII.isZeroNine(char)) {
+      if (ASCII.isZeroNine(char)) {
         _consume();
-      } else if (char == _ASCII.dot) {
+      } else if (char == ASCII.dot) {
         return _parseNumberTokenPartDot(start);
-      } else if (_ASCII.isCharE(char)) {
+      } else if (ASCII.isCharE(char)) {
         return _parseNumberTokenPartE(start);
       } else {
         break;
@@ -396,7 +342,7 @@ class JsonTokenizer {
       );
     }
     final char = _get();
-    if (!_ASCII.isZeroNine(char)) {
+    if (!ASCII.isZeroNine(char)) {
       // 小数点后必须有数字
       throw FormatException(
         "Missing digits after decimal point at position $start",
@@ -405,9 +351,9 @@ class JsonTokenizer {
     _consume();
     while (!_scanner.isDone) {
       final char = _get();
-      if (_ASCII.isZeroNine(char)) {
+      if (ASCII.isZeroNine(char)) {
         _consume();
-      } else if (_ASCII.isCharE(char)) {
+      } else if (ASCII.isCharE(char)) {
         _parseNumberTokenPartE(start);
       } else {
         break;
@@ -429,7 +375,7 @@ class JsonTokenizer {
     // 指数部分可以有可选的符号 + -
     if (!_scanner.isDone) {
       final char = _get();
-      if (char == _ASCII.minus || char == _ASCII.plus) {
+      if (char == ASCII.minus || char == ASCII.plus) {
         _consume();
       }
     }
@@ -439,14 +385,14 @@ class JsonTokenizer {
     }
     final char = _get();
     // 指数部分必须有数字
-    if (!_ASCII.isZeroNine(char)) {
+    if (!ASCII.isZeroNine(char)) {
       throw FormatException(
         "Missing digits after decimal point at position $start",
       );
     }
     _consume();
     while (!_scanner.isDone) {
-      if (_ASCII.isZeroNine(_get())) {
+      if (ASCII.isZeroNine(_get())) {
         _consume();
       } else {
         break;

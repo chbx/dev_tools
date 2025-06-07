@@ -5,10 +5,12 @@ class JsonViewerOptions {
   final bool parseNestedJsonString;
   final bool autoParsedRootString;
   final bool searchNestedRawString;
+  final bool parseFastJsonRef;
 
   const JsonViewerOptions({
     this.parseNestedJsonString = true,
     this.autoParsedRootString = true,
     this.searchNestedRawString = false,
+    this.parseFastJsonRef = true,
   });
 }

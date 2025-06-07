@@ -9,6 +9,7 @@ import '../../../shared/theme/theme.dart';
 import '../../../shared/widgets/search/search_field.dart';
 import '../../../shared/widgets/search/search_theme.dart';
 import '../service/sliver_tree_helper.dart';
+import '../view_model/json_value_vm.dart';
 import '../view_model/tree_node_data.dart';
 import 'dynamic_width.dart';
 import 'json_viewer_controller.dart';
@@ -204,6 +205,15 @@ class _InnerJsonViewerState extends State<InnerJsonViewer>
                         );
                         _maxWidthNotifier.value = maxWidth;
                       },
+                      onTreeSliverNodeUpdate: () {
+                        setState(() {
+                          // TODO 不需要全部重新计算
+                          computeTextWidthCache(
+                            textStyle: widget.textStyle,
+                            themeData: widget.themeData,
+                          );
+                        });
+                      },
                       textStyle: widget.textStyle,
                     ),
                   ),
@@ -233,6 +243,8 @@ class _JsonViewerContent extends StatefulWidget {
     required this.themeData,
     this.onNodeToggle,
 
+    this.onTreeSliverNodeUpdate,
+
     required this.textStyle,
   });
 
@@ -247,6 +259,8 @@ class _JsonViewerContent extends StatefulWidget {
   final TreeSliverNode<TreeNodeData> treeNode;
   final JsonViewerThemeData themeData;
   final TreeSliverNodeCallback? onNodeToggle;
+
+  final VoidCallback? onTreeSliverNodeUpdate;
 
   // TODO 更好的方式获取textStyle
   final TextStyle textStyle;
@@ -316,6 +330,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
               themeData: widget.themeData,
               treeSliverController: widget.treeSliverController,
               searchMatches: _searchMatchesForLine(node),
+              onTreeSliverNodeUpdate: widget.onTreeSliverNodeUpdate,
             );
           },
         );
@@ -460,12 +475,14 @@ class _JsonViewerLine extends StatelessWidget {
     required this.node,
     required this.treeSliverController,
     required this.searchMatches,
+    this.onTreeSliverNodeUpdate,
   });
 
   final JsonViewerThemeData themeData;
   final TreeSliverNode<TreeNodeData> node;
   final TreeSliverController treeSliverController;
   final List<JsonViewFindMatch> searchMatches;
+  final VoidCallback? onTreeSliverNodeUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -501,6 +518,12 @@ class _JsonViewerLine extends StatelessWidget {
 
     _buildContent(indentDepth, widgets, context);
 
+    final refExpandButton = _buildRefExpandButton();
+    if(refExpandButton != null) {
+      widgets.add(SizedBox(width: 8));
+      widgets.add(refExpandButton);
+    }
+
     return Row(children: widgets);
   }
 
@@ -525,6 +548,73 @@ class _JsonViewerLine extends StatelessWidget {
         ),
       );
     }
+  }
+
+  // TODO 重新计算最大宽度
+  Widget? _buildRefExpandButton() {
+    final nodeData = node.content;
+
+    Widget? refExpand;
+    final contentJsonValue = node.content.ref;
+    if (node.isExpanded &&
+        contentJsonValue != null &&
+        contentJsonValue is NormalJsonObjectVM) {
+      final fastJsonRef = contentJsonValue.ref;
+      if (fastJsonRef != null) {
+        refExpand = GestureDetector(
+          onTap: () {
+            final JsonValueVM treeNeedToShow;
+            if (nodeData.showRef) {
+              treeNeedToShow = contentJsonValue;
+            } else {
+              treeNeedToShow = fastJsonRef;
+            }
+
+            final refSliverTree = buildTreeNodes(treeNeedToShow);
+
+            if (refSliverTree.children.isNotEmpty) {
+              node.children.clear();
+              node.children.addAll(refSliverTree.children);
+            }
+
+            // TODO 与内容相关的属性放到一起
+            // nodeData.text = refSliverTree.content.text;
+            // nodeData.collapsedTail = refSliverTree.content.collapsedTail;
+            // nodeData.shortString = refSliverTree.content.shortString;
+            // nodeData.hint = refSliverTree.content.hint;
+
+            // TODO shortString 处理
+
+            // 不需要setState，toggleNode会触发重建
+            nodeData.showRef = !nodeData.showRef;
+
+            onTreeSliverNodeUpdate?.call();
+          },
+          child: AnimatedContainer(
+            curve: Curves.easeInOut,
+            duration: Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color:
+                  nodeData.showRef
+                      ? Colors.blueGrey.shade100
+                      : themeData.color.background,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(border: Border.all()),
+              child: SizedBox.square(
+                dimension: themeData.iconBoxSize,
+                child: Icon(
+                  // TODO switch icon
+                  Icons.expand,
+                  size: themeData.iconSize,
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    return refExpand;
   }
 
   void _buildContent(

@@ -31,11 +31,12 @@ class TreeNodeData {
   final bool isTextAllAscii;
   final String? parsedStart;
   final TreeNodeDataType? parsedType;
+  bool showRef;
 
   bool get isEnd =>
       type == TreeNodeDataType.objectEnd || type == TreeNodeDataType.arrayEnd;
 
-  const TreeNodeData(
+  TreeNodeData(
     this.text, {
     this.ref,
     required this.type,
@@ -46,7 +47,7 @@ class TreeNodeData {
     required this.isTextAllAscii,
     this.parsedStart,
     this.parsedType,
-  });
+  }) : showRef = false;
 
   String contactString() {
     String result;

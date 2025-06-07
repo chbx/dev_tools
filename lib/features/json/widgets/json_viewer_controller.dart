@@ -56,7 +56,7 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
           ),
         );
         jsonValueVM = JsonValueVM.from(jsonValue);
-        JsonValueDisplayOptimizer(options: options).processTree(jsonValueVM);
+        optimizeDisplayInfo(jsonValueVM, options);
       }
     } catch (e, stackTrace) {
       FlutterError.reportError(
