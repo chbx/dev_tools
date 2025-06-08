@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 import '../core/json_parser.dart';
 import '../core/json_parser_options.dart';
@@ -122,6 +123,9 @@ class _JsonValueDisplayOptimizer {
     if (options.parseFastJsonRef) {
       _processFastJsonRef(jsonValue);
     }
+    if (options.showMoneyHint) {
+      _processNormalObjectShorForMoney(jsonValue);
+    }
   }
 
   // [{"name":"张三"},{"$ref":"$[0]"}]
@@ -142,6 +146,61 @@ class _JsonValueDisplayOptimizer {
     }
     jsonValue.ref = jsonPath.resolve(context);
   }
+
+  void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
+    final entryMap = jsonValue.entryMap;
+    if (entryMap.length == 2) {
+      // {"cent": 0,"currency": "CNY"}
+      final cent = getEntryMapValue(entryMap, 'cent');
+      final currency = getEntryMapValue(entryMap, 'currency');
+      if (cent is JsonNumberVM && currency is JsonStringVM) {
+        jsonValue.shortString = _buildMoneyShortString(cent, currency);
+      }
+    } else if (entryMap.length == 6) {
+      // {"amount":50.00,"cent":5000,"centFactor":100,
+      // "currency":"CNY","currencyCode":"CNY","displayUnit":"元"}
+      final fields = [
+        'amount',
+        'cent',
+        'centFactor',
+        'currency',
+        'currencyCode',
+        'displayUnit',
+      ];
+      if (_containsAllField(entryMap, fields)) {
+        final cent = getEntryMapValue(entryMap, 'cent');
+        final currency = getEntryMapValue(entryMap, 'currency');
+        if (cent is JsonNumberVM && currency is JsonStringVM) {
+          jsonValue.shortString = _buildMoneyShortString(cent, currency);
+        }
+      }
+    }
+  }
+
+  String? _buildMoneyShortString(JsonNumberVM cent, JsonStringVM currency) {
+    final centValue = cent.value;
+    if (centValue is JsonNumberValueInt) {
+      final formatter = NumberFormat('#,###0.##');
+      final formatted = formatter.format(centValue.intValue / 100);
+      final currencyStr = currency.getStringValue();
+      return '$currencyStr $formatted';
+    } else {
+      return null;
+    }
+  }
+}
+
+bool _containsAllField(
+  Map<JsonObjectKeyStringVM, JsonValueVM> map,
+  List<String> fieldNames,
+) {
+  for (final fieldName in fieldNames) {
+    final value = getEntryMapValue(map, fieldName);
+    if (value == null) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // TODO duplicate code

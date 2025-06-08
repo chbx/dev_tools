@@ -31,7 +31,10 @@ class TreeNodeData {
   final bool isTextAllAscii;
   final String? parsedStart;
   final TreeNodeDataType? parsedType;
+  final String? shortString;
   bool showRef;
+
+  // TODO 增加展开 & 折叠 默认值
 
   bool get isEnd =>
       type == TreeNodeDataType.objectEnd || type == TreeNodeDataType.arrayEnd;
@@ -47,6 +50,7 @@ class TreeNodeData {
     required this.isTextAllAscii,
     this.parsedStart,
     this.parsedType,
+    this.shortString,
   }) : showRef = false;
 
   String contactString() {
@@ -84,12 +88,17 @@ TreeSliverNode<TreeNodeData> rebuildSliverTree(
   } else {
     children = tree.children;
   }
-  return TreeSliverNode(
-    tree.content,
-    children: children,
-    expanded:
-        defaultExpand && (tree.isExpanded || tree.content.parsedStart == null),
-  );
+  bool expand = defaultExpand;
+  if (defaultExpand) {
+    if (!tree.isExpanded) {
+      if (tree.content.parsedStart != null) {
+        expand = false;
+      } else if (tree.content.shortString != null) {
+        expand = false;
+      }
+    }
+  }
+  return TreeSliverNode(tree.content, children: children, expanded: expand);
 }
 
 class _TreeSliverBuilder {
@@ -337,6 +346,7 @@ class _TreeSliverBuilder {
     );
     children.add(TreeSliverNode(tail, children: _emptyArray));
 
+    final shortString = jsonValue.shortString;
     return TreeSliverNode(
       TreeNodeData(
         '{',
@@ -346,9 +356,10 @@ class _TreeSliverBuilder {
         tail: tail,
         isNameAllAscii: keyAllAscii,
         isTextAllAscii: true,
+        shortString: shortString,
       ),
       children: children,
-      expanded: _defaultExpand,
+      expanded: _defaultExpand && shortString == null,
     );
   }
 

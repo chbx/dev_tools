@@ -302,6 +302,8 @@ class NormalJsonObjectVM implements JsonObjectVM, JsonValueVM {
   // fastjson {"$ref": ""}
   JsonValueVM? ref;
 
+  String? shortString;
+
   NormalJsonObjectVM({required this.entryMap});
 
   @override

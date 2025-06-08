@@ -43,6 +43,7 @@ class JsonViewerThemeData with ScaleByFontThemeBase {
       comma: TextStyle(color: color.comma),
       foldForeground: TextStyle(color: color.foldForeground),
       foldBackground: TextStyle(backgroundColor: color.foldBackground),
+      shortString: TextStyle(color: color.shortString),
     );
   }
 
@@ -65,6 +66,7 @@ class JsonViewerTextStyle {
     required this.comma,
     required this.foldForeground,
     required this.foldBackground,
+    required this.shortString,
   });
 
   final TextStyle objectKey;
@@ -76,6 +78,7 @@ class JsonViewerTextStyle {
   final TextStyle comma;
   final TextStyle foldForeground;
   final TextStyle foldBackground;
+  final TextStyle shortString;
 }
 
 class JsonViewerColorTheme {
@@ -93,6 +96,7 @@ class JsonViewerColorTheme {
     required this.foldBackground,
     required this.findMatchBackground,
     required this.activeFindMatchBackground,
+    required this.shortString,
   });
 
   final Color background;
@@ -108,6 +112,7 @@ class JsonViewerColorTheme {
   final Color foldBackground;
   final Color findMatchBackground;
   final Color activeFindMatchBackground;
+  final Color shortString;
 }
 
 const Color _defaultIndentLineColor = Color(0xFFd3d3d3);
@@ -125,6 +130,7 @@ const defaultColorThemeData = JsonViewerColorTheme(
   foldBackground: Color.fromRGBO(0xd4, 0xd4, 0xd4, 0.25),
   findMatchBackground: Color.fromRGBO(234, 92, 0, 0.33),
   activeFindMatchBackground: Color(0xFFa8ac94),
+  shortString: Color(0xFF808080),
 );
 
 final defaultTheme = JsonViewerThemeData(

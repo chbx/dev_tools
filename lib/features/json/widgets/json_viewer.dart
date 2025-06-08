@@ -519,7 +519,7 @@ class _JsonViewerLine extends StatelessWidget {
     _buildContent(indentDepth, widgets, context);
 
     final refExpandButton = _buildRefExpandButton();
-    if(refExpandButton != null) {
+    if (refExpandButton != null) {
       widgets.add(SizedBox(width: 8));
       widgets.add(refExpandButton);
     }
@@ -650,6 +650,15 @@ class _JsonViewerLine extends StatelessWidget {
           ),
         );
       }
+
+      final TextSpan collapse;
+      if (nodeData.shortString != null) {
+        final t = ' ${nodeData.shortString} ';
+        collapse = TextSpan(text: t, style: textStyleTheme.shortString);
+      } else {
+        collapse = TextSpan(text: '...', style: textStyleTheme.foldForeground);
+      }
+
       widgets.add(
         _SimpleButton(
           onPressed: () {
@@ -659,7 +668,7 @@ class _JsonViewerLine extends StatelessWidget {
             TextSpan(
               children: [
                 TextSpan(text: nodeData.text, style: contentStyle),
-                TextSpan(text: '...', style: textStyleTheme.foldForeground),
+                collapse,
                 TextSpan(text: nodeData.tail!.text, style: contentStyle),
               ],
               style: textStyleTheme.foldBackground,
