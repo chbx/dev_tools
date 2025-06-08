@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import '../../../shared/theme/theme.dart';
 import '../../../shared/widgets/search/search_field.dart';
@@ -270,6 +271,8 @@ class _JsonViewerContent extends StatefulWidget {
 }
 
 class _JsonViewerContentState extends State<_JsonViewerContent> {
+  final _selectedNodeNotifier = ValueNotifier<TreeSliverNode?>(null);
+
   @override
   void initState() {
     super.initState();
@@ -283,6 +286,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
     widget.jsonViewerController.activeSearchMatch.removeListener(
       _onActiveSearchMatchChange,
     );
+    _selectedNodeNotifier.dispose();
     super.dispose();
   }
 
@@ -325,12 +329,21 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
         return ListenableBuilder(
           listenable: widget.jsonViewerController.activeSearchMatch,
           builder: (context, child) {
-            return _JsonViewerLine(
-              node: node as TreeSliverNode<TreeNodeData>,
-              themeData: widget.themeData,
-              treeSliverController: widget.treeSliverController,
-              searchMatches: _searchMatchesForLine(node),
-              onTreeSliverNodeUpdate: widget.onTreeSliverNodeUpdate,
+            return ValueListenableBuilder(
+              valueListenable: _selectedNodeNotifier,
+              builder: (context, value, child) {
+                return _JsonViewerLine(
+                  node: node as TreeSliverNode<TreeNodeData>,
+                  themeData: widget.themeData,
+                  treeSliverController: widget.treeSliverController,
+                  searchMatches: _searchMatchesForLine(node),
+                  onTreeSliverNodeUpdate: widget.onTreeSliverNodeUpdate,
+                  selected: value == node,
+                  onNodeClicked: () {
+                    _selectedNodeNotifier.value = node;
+                  },
+                );
+              },
             );
           },
         );
@@ -476,6 +489,9 @@ class _JsonViewerLine extends StatelessWidget {
     required this.treeSliverController,
     required this.searchMatches,
     this.onTreeSliverNodeUpdate,
+
+    required this.selected,
+    this.onNodeClicked,
   });
 
   final JsonViewerThemeData themeData;
@@ -483,6 +499,9 @@ class _JsonViewerLine extends StatelessWidget {
   final TreeSliverController treeSliverController;
   final List<JsonViewFindMatch> searchMatches;
   final VoidCallback? onTreeSliverNodeUpdate;
+
+  final bool selected;
+  final VoidCallback? onNodeClicked;
 
   @override
   Widget build(BuildContext context) {
@@ -492,8 +511,6 @@ class _JsonViewerLine extends StatelessWidget {
     final indentDepth = content.isEnd ? oriDepth - 1 : oriDepth;
 
     final widgets = <Widget>[];
-    _buildIndent(indentDepth, widgets);
-
     final isExpandable = node.children.isNotEmpty;
     if (isExpandable) {
       widgets.add(
@@ -524,7 +541,35 @@ class _JsonViewerLine extends StatelessWidget {
       widgets.add(refExpandButton);
     }
 
-    return Row(children: widgets);
+    final indentWidgets = <Widget>[];
+    _buildIndent(indentDepth, indentWidgets);
+
+    final jsonValue = content.ref;
+    return Row(
+      children: [
+        ...indentWidgets,
+        GestureDetector(onTap: onNodeClicked, child: Row(children: widgets)),
+        if (selected && jsonValue != null) SizedBox(width: 8),
+        if (selected && jsonValue != null)
+          SizedBox.square(
+            dimension: themeData.defaultRowHeight,
+            child: IconButton(
+              onPressed: () async {
+                // TODO 所有数据实现copy
+                final text = JsonValueVM.toJsonString(jsonValue);
+                await Clipboard.setData(ClipboardData(text: text));
+              },
+              style: IconButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4.0),
+                ),
+              ),
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.copy, size: themeData.iconSize),
+            ),
+          ),
+      ],
+    );
   }
 
   void _buildIndent(int indentDepth, List<Widget> widgets) {
