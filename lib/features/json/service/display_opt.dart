@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' as intl;
 
 import '../core/json_parser.dart';
 import '../core/json_parser_options.dart';
@@ -22,7 +22,7 @@ class _JsonValueDisplayOptimizer {
   final JsonValueVM context;
   final CashedParser _cashedParser = CashedParser();
 
-  void processTree(JsonValueVM jsonValue) {
+  void processTree(JsonValueVM jsonValue, {JsonObjectKeyVM? jsonKey}) {
     try {
       switch (jsonValue) {
         case JsonStringVM():
@@ -31,11 +31,14 @@ class _JsonValueDisplayOptimizer {
           }
           break;
         case JsonNumberVM():
+          if (options.showDateHint) {
+            _processDateHint(jsonValue, jsonKey);
+          }
           break;
         case NormalJsonObjectVM():
           _processNormalObject(jsonValue);
           for (final entry in jsonValue.entryMap.entries) {
-            processTree(entry.value);
+            processTree(entry.value,  jsonKey: entry.key);
           }
           break;
         case JsonArrayVM():
@@ -45,7 +48,7 @@ class _JsonValueDisplayOptimizer {
           break;
         case ExtendedJsonObjectVM():
           for (final entry in jsonValue.entryMap.entries) {
-            processTree(entry.value);
+            processTree(entry.value, jsonKey: entry.key);
           }
           break;
         default:
@@ -180,12 +183,51 @@ class _JsonValueDisplayOptimizer {
   String? _buildMoneyShortString(JsonNumberVM cent, JsonStringVM currency) {
     final centValue = cent.value;
     if (centValue is JsonNumberValueInt) {
-      final formatter = NumberFormat('#,###0.##');
+      final formatter = intl.NumberFormat('#,###0.##');
       final formatted = formatter.format(centValue.intValue / 100);
       final currencyStr = currency.getStringValue();
       return '$currencyStr $formatted';
     } else {
       return null;
+    }
+  }
+
+  // {"date": 0, "time": 0}
+  void _processDateHint(JsonNumberVM jsonValue, JsonObjectKeyVM? jsonKey) {
+    if (jsonKey == null) {
+      return;
+    }
+    final jsonNum = jsonValue.value;
+    if (jsonKey is JsonObjectKeyStringVM && jsonNum is JsonNumberValueInt) {
+      final jsonKeyStr = jsonKey.value.getStringValue().toLowerCase();
+      if (jsonKeyStr.contains('gmt') ||
+          jsonKeyStr.contains('date') ||
+          jsonKeyStr.contains('time')) {
+        final dateTime = DateTime.fromMillisecondsSinceEpoch(jsonNum.intValue);
+
+        String dateTimeStr;
+        if (jsonNum.intValue % 1000 == 0) {
+          final dateFormatStr = 'yyyy-MM-dd HH:mm:ss';
+          dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
+          if (dateTimeStr.endsWith('00:00:00')) {
+            dateTimeStr = dateTimeStr.substring(0, 10);
+          }
+        } else {
+          final dateFormatStr = 'yyyy-MM-dd HH:mm:ss.SSS';
+          dateTimeStr = intl.DateFormat(dateFormatStr).format(dateTime);
+        }
+
+        final offset = dateTime.timeZoneOffset;
+        final utcHourOffset =
+            (offset.isNegative ? '-' : '+') +
+            offset.inHours.abs().toString().padLeft(2, '0');
+        final utcMinuteOffset = (offset.inMinutes - offset.inHours * 60)
+            .toString()
+            .padLeft(2, '0');
+        final dateTimeWithOffset =
+            '$dateTimeStr$utcHourOffset:$utcMinuteOffset';
+        jsonValue.dateHint = dateTimeWithOffset;
+      }
     }
   }
 }

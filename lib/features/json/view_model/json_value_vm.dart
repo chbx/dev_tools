@@ -258,6 +258,7 @@ class JsonStringVM implements JsonValueVM {
 class JsonNumberVM implements JsonValueVM {
   final String rawText;
   final JsonNumberValue value;
+  String? dateHint;
 
   JsonNumberVM({required this.rawText, required this.value});
 

@@ -705,6 +705,12 @@ class _JsonViewerLine extends StatelessWidget {
       widgets.add(
         Text.rich(TextSpan(children: searchAwareLineContents(spans, context))),
       );
+
+      final hintString = nodeData.hintString;
+      if (hintString != null) {
+        widgets.add(SizedBox(width: 8));
+        widgets.add(Text('// $hintString', style: textStyleTheme.hint));
+      }
     }
   }
 

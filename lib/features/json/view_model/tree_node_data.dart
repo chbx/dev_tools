@@ -32,6 +32,7 @@ class TreeNodeData {
   final String? parsedStart;
   final TreeNodeDataType? parsedType;
   final String? shortString;
+  final String? hintString;
   bool showRef;
 
   // TODO 增加展开 & 折叠 默认值
@@ -51,6 +52,7 @@ class TreeNodeData {
     this.parsedStart,
     this.parsedType,
     this.shortString,
+    this.hintString,
   }) : showRef = false;
 
   String contactString() {
@@ -155,6 +157,7 @@ class _TreeSliverBuilder {
           comma: comma,
           isNameAllAscii: keyAllAscii,
           isTextAllAscii: true,
+          hintString: jsonValue.dateHint,
         ),
         children: _emptyArray,
       ),

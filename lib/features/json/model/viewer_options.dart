@@ -7,6 +7,7 @@ class JsonViewerOptions {
   final bool searchNestedRawString;
   final bool parseFastJsonRef;
   final bool showMoneyHint;
+  final bool showDateHint;
 
   const JsonViewerOptions({
     this.parseNestedJsonString = true,
@@ -14,5 +15,6 @@ class JsonViewerOptions {
     this.searchNestedRawString = false,
     this.parseFastJsonRef = true,
     this.showMoneyHint = true,
+    this.showDateHint = true,
   });
 }
