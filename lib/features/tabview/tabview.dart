@@ -4,30 +4,34 @@ import 'package:flutter/material.dart';
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 
 class TabData {
-  TabData({required this.id, required this.title});
+  TabData({required this.id, required this.tabName});
 
   final int id;
 
-  final String title;
+  final String tabName;
 }
 
 class TabView extends StatefulWidget {
   const TabView({
     super.key,
+    this.tabPrefix,
     required this.selectedIndex,
     required this.tabDataList,
     required this.content,
     this.onClosed,
     this.onSelected,
     this.onCreated,
+    required this.hasSidebar,
   });
 
   final List<TabData> tabDataList;
+  final Widget? tabPrefix;
   final int selectedIndex;
   final Widget content;
   final void Function(int)? onClosed;
   final void Function(int)? onSelected;
   final void Function()? onCreated;
+  final bool hasSidebar;
 
   @override
   State<TabView> createState() => _TabViewState();
@@ -44,13 +48,30 @@ class _TabViewState extends State<TabView> {
 
   @override
   Widget build(BuildContext context) {
+    final tabPrefix = widget.tabPrefix;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _warpBar(
           Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: _buildTabs(widget.tabDataList),
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              if (tabPrefix != null) _warpButton(tabPrefix),
+              if (tabPrefix != null) SizedBox(width: 8.0),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2.0),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _buildTabs(widget.tabDataList),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 60),
+            ],
           ),
         ),
         Expanded(child: widget.content),
@@ -67,7 +88,7 @@ class _TabViewState extends State<TabView> {
         _warpButton(
           TabButton(
             key: ValueKey(tabData.id),
-            name: tabData.title,
+            name: tabData.tabName,
             selected: index == widget.selectedIndex,
             onPressed: () {
               widget.onSelected?.call(index);
@@ -137,10 +158,11 @@ class _TabViewState extends State<TabView> {
   Widget _warpBar(Widget widget) {
     if (Platform.isMacOS) {
       const tabBarMaxHeight = 38.0;
-      const tabBarPaddingTop = 4.0;
-      const tabBarInnerHeight = tabBarMaxHeight - tabBarPaddingTop;
       return Container(
-        padding: EdgeInsets.only(left: 80.0, top: tabBarPaddingTop),
+        padding:
+            this.widget.hasSidebar
+                ? EdgeInsets.only(left: 4.0)
+                : EdgeInsets.only(left: 80.0),
         height: tabBarMaxHeight,
         color: Color(0xFFe3e3e3),
         child: MacosToolbarPassthroughScope(child: widget),
@@ -224,10 +246,7 @@ class _TabButtonState extends State<TabButton> {
           duration:
               widget.selected ? Duration.zero : Duration(milliseconds: 150),
           padding: EdgeInsets.symmetric(horizontal: 8.0),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: borderRadius,
-          ),
+          decoration: BoxDecoration(color: bgColor, borderRadius: borderRadius),
 
           child: Row(
             children: [
