@@ -44,7 +44,7 @@ class JsonViewer extends StatelessWidget {
       builder: (BuildContext context, JsonViewerData value, Widget? child) {
         return Stack(
           children: [
-            buildJsonViewer(value, textStyle),
+            buildJsonViewer(value, textStyle, media.padding.top),
             PositionedPopup(
               isVisibleListenable: controller.showSearchField,
               top: media.padding.top + denseSpacing,
@@ -57,11 +57,18 @@ class JsonViewer extends StatelessWidget {
     );
   }
 
-  Widget buildJsonViewer(JsonViewerData viewData, TextStyle textStyle) {
+  Widget buildJsonViewer(
+    JsonViewerData viewData,
+    TextStyle textStyle,
+    double paddingTop,
+  ) {
     final msg = viewData.errorMessage;
     final treeNode = viewData.treeNode;
     if (msg != null) {
-      return Text(msg);
+      return Padding(
+        padding: EdgeInsets.only(top: paddingTop),
+        child: Text(msg),
+      );
     } else if (treeNode == null) {
       return Container();
     } else {
