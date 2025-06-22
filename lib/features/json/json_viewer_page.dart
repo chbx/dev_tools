@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,18 +24,16 @@ class JsonViewerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double menuBarHeight = 28.0;
+    final media = MediaQuery.of(context);
     return KeyboardShortcuts(
       keyboardShortcuts: buildKeyboardShortcuts(jsonViewerController),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          MenuBar(
-            jsonViewerController: jsonViewerController,
-            onChanged: (value) {
-              jsonViewerController.text = value;
-            },
-          ),
-          Expanded(
+          MediaQuery(
+            data: media.copyWith(
+              padding: media.padding.copyWith(top: menuBarHeight),
+            ),
             child: JsonViewer(
               themeData: JsonViewerThemeData(
                 color: defaultColorThemeData,
@@ -46,6 +46,23 @@ class JsonViewerPage extends StatelessWidget {
               controller: jsonViewerController,
               scrollIdH: scrollIdH,
               scrollIdV: scrollIdV,
+            ),
+          ),
+          Positioned(
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                child: MenuBar(
+                  jsonViewerController: jsonViewerController,
+                  onChanged: (value) {
+                    jsonViewerController.text = value;
+                  },
+                  height: menuBarHeight,
+                ),
+              ),
             ),
           ),
         ],
@@ -84,19 +101,21 @@ class MenuBar extends StatelessWidget {
     super.key,
     required this.jsonViewerController,
     this.onChanged,
+    required this.height,
   });
 
   final JsonViewerController jsonViewerController;
 
   final ValueChanged<String>? onChanged;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     const spacing = 2.0;
     return Container(
-      height: 28,
+      height: height,
       padding: EdgeInsets.only(top: 2, bottom: 2),
-      color: const Color(0xFFf7f7f7),
+      color: const Color(0xAAf7f7f7),
       child: Row(
         children: [
           SizedBox(width: 10),

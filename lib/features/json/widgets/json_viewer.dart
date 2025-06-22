@@ -38,6 +38,7 @@ class JsonViewer extends StatelessWidget {
     final textStyle = DefaultTextStyle.of(context).style.merge(
       TextStyle(fontFamily: themeData.fontFamily, fontSize: themeData.fontSize),
     );
+    final media = MediaQuery.of(context);
     return ValueListenableBuilder(
       valueListenable: controller.viewDataNotifier,
       builder: (BuildContext context, JsonViewerData value, Widget? child) {
@@ -46,7 +47,7 @@ class JsonViewer extends StatelessWidget {
             buildJsonViewer(value, textStyle),
             PositionedPopup(
               isVisibleListenable: controller.showSearchField,
-              top: denseSpacing,
+              top: media.padding.top + denseSpacing,
               right: 20,
               child: buildSearchInFileField(),
             ),
@@ -305,12 +306,20 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    Widget? paddingTop;
+    if (media.padding.top > 0) {
+      paddingTop = SliverToBoxAdapter(
+        child: SizedBox(height: media.padding.top),
+      );
+    }
     return CustomScrollView(
       scrollBehavior: ScrollConfiguration.of(
         context,
       ).copyWith(scrollbars: false),
       controller: widget.verticalController,
       slivers: [
+        if (paddingTop != null) paddingTop,
         TreeSliver(
           tree: [widget.treeNode],
           controller: _treeSliverController,
