@@ -58,6 +58,8 @@ void main() {
             home: JsonViewer(
               controller: JsonViewerController(text: json),
               themeData: defaultTheme,
+              scrollIdV: 'v',
+              scrollIdH: 'h',
             ),
           ),
         );
@@ -98,7 +100,14 @@ void main() {
     final controller = JsonViewerController(text: json);
     final theme = defaultTheme;
     await tester.pumpWidget(
-      MaterialApp(home: JsonViewer(controller: controller, themeData: theme)),
+      MaterialApp(
+        home: JsonViewer(
+          controller: controller,
+          themeData: theme,
+          scrollIdV: 'v',
+          scrollIdH: 'h',
+        ),
+      ),
     );
 
     // long text width

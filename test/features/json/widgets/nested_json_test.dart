@@ -52,6 +52,8 @@ void main() {
           home: JsonViewer(
             controller: JsonViewerController(text: jsonText),
             themeData: defaultTheme,
+            scrollIdV: 'v',
+            scrollIdH: 'h',
           ),
         ),
       );
@@ -71,6 +73,8 @@ void main() {
               options: JsonViewerOptions(parseNestedJsonString: false),
             ),
             themeData: defaultTheme,
+            scrollIdV: 'v',
+            scrollIdH: 'h',
           ),
         ),
       );
@@ -88,6 +92,8 @@ void main() {
           home: JsonViewer(
             controller: JsonViewerController(text: jsonStringText),
             themeData: defaultTheme,
+            scrollIdV: 'v',
+            scrollIdH: 'h',
           ),
         ),
       );
@@ -104,6 +110,8 @@ void main() {
               options: JsonViewerOptions(autoParsedRootString: false),
             ),
             themeData: defaultTheme,
+            scrollIdV: 'v',
+            scrollIdH: 'h',
           ),
         ),
       );
@@ -114,7 +122,13 @@ void main() {
     testWidgets('Nested Json Collapse&Expand', (WidgetTester tester) async {
       final controller = JsonViewerController(text: jsonText);
       await tester.pumpWidget(
-        MaterialApp(home: JsonViewerPage(jsonViewerController: controller)),
+        MaterialApp(
+          home: JsonViewerPage(
+            jsonViewerController: controller,
+            scrollIdV: 'v',
+            scrollIdH: 'h',
+          ),
+        ),
       );
 
       controller.collapseAll();
@@ -147,7 +161,13 @@ void main() {
           options: JsonViewerOptions(searchNestedRawString: false),
         );
         await tester.pumpWidget(
-          MaterialApp(home: JsonViewerPage(jsonViewerController: controller)),
+          MaterialApp(
+            home: JsonViewerPage(
+              jsonViewerController: controller,
+              scrollIdV: 'v',
+              scrollIdH: 'h',
+            ),
+          ),
         );
         final themeData =
             tester.widget<JsonViewer>(find.byType(JsonViewer)).themeData;
@@ -236,7 +256,13 @@ void main() {
           options: JsonViewerOptions(searchNestedRawString: true),
         );
         await tester.pumpWidget(
-          MaterialApp(home: JsonViewerPage(jsonViewerController: controller)),
+          MaterialApp(
+            home: JsonViewerPage(
+              jsonViewerController: controller,
+              scrollIdV: 'v',
+              scrollIdH: 'h',
+            ),
+          ),
         );
         final themeData =
             tester.widget<JsonViewer>(find.byType(JsonViewer)).themeData;

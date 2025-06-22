@@ -18,7 +18,13 @@ void main() {
         '}';
     final controller = JsonViewerController(text: json);
     await tester.pumpWidget(
-      MaterialApp(home: JsonViewerPage(jsonViewerController: controller)),
+      MaterialApp(
+        home: JsonViewerPage(
+          jsonViewerController: controller,
+          scrollIdV: 'v',
+          scrollIdH: 'h',
+        ),
+      ),
     );
 
     final searchFieldFinder = find.byType(TextField);

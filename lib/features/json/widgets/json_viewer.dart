@@ -23,10 +23,15 @@ class JsonViewer extends StatelessWidget {
     super.key,
     required this.controller,
     required this.themeData,
+    required this.scrollIdH,
+    required this.scrollIdV,
   });
 
   final JsonViewerController controller;
   final JsonViewerThemeData themeData;
+
+  final String scrollIdH;
+  final String scrollIdV;
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +69,8 @@ class JsonViewer extends StatelessWidget {
         themeData: themeData,
         textStyle: textStyle,
         treeNode: treeNode,
+        scrollIdH: scrollIdH,
+        scrollIdV: scrollIdV,
       );
     }
   }
@@ -113,12 +120,18 @@ class InnerJsonViewer extends StatefulWidget {
     required this.themeData,
     required this.textStyle,
     required this.treeNode,
+
+    required this.scrollIdH,
+    required this.scrollIdV,
   });
 
   final JsonViewerController controller;
   final JsonViewerThemeData themeData;
   final TextStyle textStyle;
   final TreeSliverNode<TreeNodeData> treeNode;
+
+  final String scrollIdH;
+  final String scrollIdV;
 
   @override
   State<InnerJsonViewer> createState() => _InnerJsonViewerState();
@@ -129,7 +142,6 @@ class _InnerJsonViewerState extends State<InnerJsonViewer>
   final ScrollController _horizontalController = ScrollController();
   final ScrollController _verticalController = ScrollController();
   final ValueNotifier<double> _maxWidthNotifier = ValueNotifier(0);
-  final TreeSliverController _treeSliverController = TreeSliverController();
 
   @override
   TreeSliverNode<TreeNodeData> get rootNode => widget.treeNode;
@@ -159,8 +171,6 @@ class _InnerJsonViewerState extends State<InnerJsonViewer>
   @override
   void dispose() {
     _maxWidthNotifier.dispose();
-    _verticalController.dispose();
-    _horizontalController.dispose();
     super.dispose();
   }
 
@@ -177,6 +187,7 @@ class _InnerJsonViewerState extends State<InnerJsonViewer>
             getMaxWidth(),
           );
           return Scrollbar(
+            key: PageStorageKey(widget.scrollIdH),
             thumbVisibility: true,
             controller: _horizontalController,
             child: SingleChildScrollView(
@@ -189,12 +200,12 @@ class _InnerJsonViewerState extends State<InnerJsonViewer>
                   child: DefaultTextStyle(
                     style: widget.textStyle,
                     child: _JsonViewerContent(
+                      key: PageStorageKey(widget.scrollIdV),
                       height: constraints.maxHeight,
                       width: constraints.maxWidth,
                       jsonViewerController: widget.controller,
                       horizontalController: _horizontalController,
                       verticalController: _verticalController,
-                      treeSliverController: _treeSliverController,
                       treeNode: widget.treeNode,
                       themeData: widget.themeData,
                       onNodeToggle: (node) {
@@ -237,7 +248,6 @@ class _JsonViewerContent extends StatefulWidget {
     required this.jsonViewerController,
     required this.horizontalController,
     required this.verticalController,
-    required this.treeSliverController,
 
     required this.treeNode,
     required this.themeData,
@@ -254,7 +264,6 @@ class _JsonViewerContent extends StatefulWidget {
   final JsonViewerController jsonViewerController;
   final ScrollController horizontalController;
   final ScrollController verticalController;
-  final TreeSliverController treeSliverController;
 
   final TreeSliverNode<TreeNodeData> treeNode;
   final JsonViewerThemeData themeData;
@@ -270,6 +279,8 @@ class _JsonViewerContent extends StatefulWidget {
 }
 
 class _JsonViewerContentState extends State<_JsonViewerContent> {
+  final _treeSliverController = TreeSliverController();
+
   @override
   void initState() {
     super.initState();
@@ -302,7 +313,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
       slivers: [
         TreeSliver(
           tree: [widget.treeNode],
-          controller: widget.treeSliverController,
+          controller: _treeSliverController,
           treeNodeBuilder: _treeNodeBuilder,
           treeRowExtentBuilder:
               (node, dimensions) => widget.themeData.defaultRowHeight,
@@ -328,7 +339,7 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
             return _JsonViewerLine(
               node: node as TreeSliverNode<TreeNodeData>,
               themeData: widget.themeData,
-              treeSliverController: widget.treeSliverController,
+              treeSliverController: _treeSliverController,
               searchMatches: _searchMatchesForLine(node),
               onTreeSliverNodeUpdate: widget.onTreeSliverNodeUpdate,
             );
@@ -360,14 +371,14 @@ class _JsonViewerContentState extends State<_JsonViewerContent> {
     if (activeMatch.end > nameLen + _colonSpace.length) {
       final currentNode = currentPath.data;
       if (currentNode.isExpanded) {
-        widget.treeSliverController.toggleNode(currentPath.data);
+        _treeSliverController.toggleNode(currentPath.data);
       }
     }
     final prePath = currentPath.prev;
     if (prePath != null) {
       prePath.invokeFromRoot((node) {
         if (!node.isExpanded) {
-          widget.treeSliverController.toggleNode(node);
+          _treeSliverController.toggleNode(node);
         }
       });
     }

@@ -8,9 +8,17 @@ import 'widgets/json_viewer_controller.dart';
 import 'widgets/json_viewer_theme.dart';
 
 class JsonViewerPage extends StatelessWidget {
-  const JsonViewerPage({super.key, required this.jsonViewerController});
+  const JsonViewerPage({
+    super.key,
+    required this.jsonViewerController,
+    required this.scrollIdH,
+    required this.scrollIdV,
+  });
 
   final JsonViewerController jsonViewerController;
+
+  final String scrollIdH;
+  final String scrollIdV;
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +44,8 @@ class JsonViewerPage extends StatelessWidget {
                 spaceAfterIcon: 4,
               ),
               controller: jsonViewerController,
+              scrollIdH: scrollIdH,
+              scrollIdV: scrollIdV,
             ),
           ),
         ],
@@ -82,59 +92,65 @@ class MenuBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const spacing = 2.0;
     return Container(
-      padding: EdgeInsets.only(top: 6, bottom: 6),
-      color: Colors.grey[100],
+      height: 28,
+      padding: EdgeInsets.only(top: 2, bottom: 2),
+      color: const Color(0xFFf7f7f7),
       child: Row(
         children: [
           SizedBox(width: 10),
-          MenuButton(
+          IconMenuButton(
             onPressed: () async {
               final text = await Clipboard.getData('text/plain');
               onChanged?.call(text?.text ?? '');
             },
-            child: Text('Paste'),
+            tooltip: 'Paste',
+            icon: Icon(Icons.paste_rounded),
           ),
-          SizedBox(width: 6),
-          MenuButton(
+          SizedBox(width: spacing),
+          IconMenuButton(
             onPressed: () async {
               final text = jsonViewerController.getTextContent();
               if (text != null) {
                 await Clipboard.setData(ClipboardData(text: text));
               }
             },
-            child: Text('Copy'),
+            tooltip: 'Copy',
+            icon: Icon(Icons.copy_rounded),
           ),
-          SizedBox(width: 6),
-          MenuButton(
+          SizedBox(width: spacing),
+          IconMenuButton(
             onPressed: () {
               onChanged?.call('');
             },
-            child: Text('Clear'),
+            tooltip: 'Clear',
+            icon: Icon(Icons.clear_rounded),
           ),
-
-          SizedBox(width: 8),
+          SizedBox(width: 4),
           DecoratedBox(
             decoration: BoxDecoration(
               border: Border(
                 left: BorderSide(width: 1, color: Colors.grey[400]!),
               ),
             ),
-            child: SizedBox(height: 20),
+            child: SizedBox(height: 14),
           ),
-          SizedBox(width: 8),
-          MenuButton(
+          SizedBox(width: 4),
+          IconMenuButton(
             onPressed: () {
               jsonViewerController.expandAll();
             },
-            child: Text('Expand'),
+            tooltip: 'Expand All',
+            icon: Icon(Icons.unfold_more_rounded),
           ),
-          SizedBox(width: 6),
-          MenuButton(
+          SizedBox(width: spacing),
+          IconMenuButton(
             onPressed: () {
               jsonViewerController.collapseAll();
             },
-            child: Text('Collapse'),
+            tooltip: 'Collapse All',
+            icon: Icon(Icons.unfold_less_rounded),
           ),
         ],
       ),
@@ -151,7 +167,7 @@ class MenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double buttonHeight = 28;
+    const double buttonHeight = 22;
     return SizedBox(
       height: buttonHeight,
       child: ElevatedButton(
@@ -172,26 +188,34 @@ class MenuButton extends StatelessWidget {
   }
 }
 
-class MenuIconButton extends StatelessWidget {
-  const MenuIconButton({super.key, this.onPressed, required this.icon});
+class IconMenuButton extends StatelessWidget {
+  const IconMenuButton({
+    super.key,
+    this.onPressed,
+    required this.icon,
+    required this.tooltip,
+  });
 
   final VoidCallback? onPressed;
 
   final Widget icon;
 
+  final String tooltip;
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 32,
-      height: 32,
+    return Tooltip(
+      waitDuration: Duration(milliseconds: 500),
+      message: tooltip,
+      padding: const EdgeInsets.all(8.0),
       child: IconButton(
         onPressed: onPressed,
         icon: icon,
         style: IconButton.styleFrom(
-          iconSize: 18,
+          iconSize: 14,
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(6)),
+            borderRadius: BorderRadius.all(Radius.circular(4)),
           ),
         ),
       ),
