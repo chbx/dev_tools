@@ -4,6 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 
 const double _redYellowGreenWidth = 80.0;
+const double _sidebarButtonSize = 26.0;
+const double _minSidebarWidth = 180;
+const double _resizeAreaWidth = 3.0;
+
+typedef _SidebarAwareBuilder =
+    Widget Function(
+      double sidebarWidth,
+      double animatedSidebarWidth,
+      Widget? child,
+    );
 
 class MacosDesktopStyle {
   MacosDesktopStyle({
@@ -40,9 +50,12 @@ class MacosDesktopScaffold extends StatefulWidget {
 
 class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
     with SingleTickerProviderStateMixin {
-  bool _showSidebar = false;
-  final _sidebarWidthNotifier = ValueNotifier<double>(300);
+  final _sidebarWidthNotifier = ValueNotifier<double>(240);
+  double? _sidebarWidthBeforeResizeCache;
+  double _sidebarWidthResizeDelta = 0;
+
   late final AnimationController _sidebarShowController;
+  late final CurvedAnimation _sidebarShowAnimation;
 
   @override
   void initState() {
@@ -51,161 +64,197 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
       vsync: this,
       duration: Duration(milliseconds: 200),
     );
+    _sidebarShowAnimation = CurvedAnimation(
+      parent: _sidebarShowController,
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
   void dispose() {
     _sidebarWidthNotifier.dispose();
+    _sidebarShowAnimation.dispose();
     _sidebarShowController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _toolbar(),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _showSidebar ? _sidebar() : const SizedBox.shrink(),
-              Expanded(
-                child: widget.content,
-                // Container(
-                //   decoration: BoxDecoration(
-                //     color: Colors.white,
-                //     boxShadow: [
-                //       BoxShadow(
-                //         offset: Offset(-2, 0),
-                //         blurRadius: 0,
-                //         // spreadRadius: 2,
-                //       ),
-                //     ],
-                //   ),
-                //  child:
-                // ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    // BACKGROUND:
+    //   LEFT  (toolbar & sidebar same color)
+    //   RIGHT:  (boxShadow if sidebar exists)
+    //     toolbar
+    //     content
+    // FG:
+    //   TOP: toolbar (animated & adjustWidthArea & toolbarContent)
+    //   BOTTOM: (stack)
+    //     LEFT: sidebar (stack: sidebar & adjustWidthArea)
+    //     RIGHT: content
+
+    return Stack(children: [_background(), _foreground()]);
   }
 
-  Widget _toolbar() {
-    return MacosToolbarPassthroughScope(
-      child: Stack(
+  Widget _background() {
+    return _sidebarAware(
+      builder: (_, animatedSidebarWidth, child) {
+        // add boxShadow if sidebar exists
+        Widget rightContent = child!;
+        if (animatedSidebarWidth > 0) {
+          rightContent = DecoratedBox(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey,
+                  offset: Offset.zero,
+                  blurRadius: 0.5,
+                ),
+              ],
+            ),
+            child: rightContent,
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // LEFT (sidebar cross toolbar)
+            SizedBox(
+              width: animatedSidebarWidth,
+              child: ColoredBox(color: widget.style.sidebarBackgroundColor),
+            ),
+            // RIGHT (toolbar & content)
+            Expanded(child: rightContent),
+          ],
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(
             height: widget.style.toolbarHeight,
-            child: Row(
-              children: [
-                _sidebarBackground(),
-                Expanded(
-                  child: Container(color: widget.style.toolbarBackgroundColor),
-                ),
-              ],
-            ),
+            child: ColoredBox(color: widget.style.toolbarBackgroundColor),
           ),
-          Positioned.fill(
-            child: Row(
-              children: [
-                ValueListenableBuilder(
-                  valueListenable: _sidebarWidthNotifier,
-                  builder: (context, sidebarWidth, child) {
-                    return SizedBox(
-                      width: _showSidebar ? sidebarWidth : null,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                            left: _redYellowGreenWidth,
-                          ),
-                          child: MacosToolbarPassthrough(
-                            child: _sidebarIconButton(),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 4.0),
-                widget.toolbar,
-              ],
-            ),
-          ),
+          // Expanded(child: ColoredBox(color: Colors.white)),
+          Expanded(child: SizedBox.shrink()),
         ],
       ),
     );
   }
 
-  Widget _sidebarBackground() {
-    return _showSidebar
-        ? Stack(
-          children: [
-            ValueListenableBuilder(
-              valueListenable: _sidebarWidthNotifier,
-              builder: (context, sidebarWidth, child) {
-                return Container(
-                  width: sidebarWidth,
-                  decoration: BoxDecoration(
-                    color: widget.style.sidebarBackgroundColor,
-                    border: BoxBorder.fromLTRB(
-                      right: BorderSide(width: 0.5, color: Colors.grey),
-                    ),
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              top: 0.0,
-              bottom: 0.0,
-              right: 0.0,
-              child: MacosToolbarPassthrough(child: _sidebarResizeArea()),
-            ),
-          ],
-        )
-        : const SizedBox.shrink();
+  Widget _foreground() {
+    return Column(children: [_toolbar(), Expanded(child: _body())]);
   }
 
-  Widget _sidebar() {
-    return ValueListenableBuilder(
-      valueListenable: _sidebarWidthNotifier,
-      builder: (context, sidebarWidth, child) {
-        return SizedBox(
-          width: sidebarWidth,
-          child: Stack(
+  Widget _toolbar() {
+    return Padding(
+      padding: const EdgeInsets.only(left: _redYellowGreenWidth),
+      child: SizedBox(
+        height: widget.style.toolbarHeight,
+        child: MacosToolbarPassthroughScope(
+          child: Row(
             children: [
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: widget.style.sidebarBackgroundColor,
-                    border: BoxBorder.fromLTRB(
-                      right: BorderSide(width: 0.5, color: Colors.grey),
-                    ),
-                  ),
-                  child: widget.sidebarBuilder.call(),
-                ),
+              MacosToolbarPassthrough(child: _sidebarIconButton()),
+              _sidebarAware(
+                builder: (sidebarWidth, animatedSidebarWidth, _) {
+                  final width =
+                      animatedSidebarWidth -
+                      _redYellowGreenWidth -
+                      _sidebarButtonSize;
+                  if (width <= 0) {
+                    return SizedBox.shrink();
+                  }
+                  final resize =
+                      _sidebarShowController.isCompleted &&
+                      width > _resizeAreaWidth;
+                  return SizedBox(
+                    width: width,
+                    height: widget.style.toolbarHeight,
+                    child:
+                        resize
+                            ? Align(
+                              alignment: Alignment.centerRight,
+                              child: MacosToolbarPassthrough(
+                                child: _sidebarResizeArea(),
+                              ),
+                            )
+                            : null,
+                  );
+                },
               ),
-              Positioned(
-                top: 0.0,
-                bottom: 0.0,
-                right: 0.0,
-                child: _sidebarResizeArea(),
-              ),
+              const SizedBox(width: 4.0),
+              Expanded(child: widget.toolbar),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _body() {
+    return _sidebarAware(
+      builder: (sidebarWidth, animatedSidebarWidth, child) {
+        Widget? sidebar;
+        if (animatedSidebarWidth > 0) {
+          Widget current = child!;
+          if (_sidebarShowController.isCompleted) {
+            current = Stack(
+              children: [
+                current,
+                Positioned(
+                  top: 0,
+                  bottom: 0,
+                  right: 0,
+                  child: _sidebarResizeArea(),
+                ),
+              ],
+            );
+          }
+          sidebar = Positioned(
+            top: 0,
+            bottom: 0,
+            left: 0,
+            child: SizedBox(width: sidebarWidth, child: current),
+          );
+        }
+
+        return Stack(
+          children: [
+            if (sidebar != null) sidebar,
+            Positioned(
+              top: 0,
+              bottom: 0,
+              left: animatedSidebarWidth,
+              right: 0,
+              child: ColoredBox(color: Colors.white, child: widget.content),
+            ),
+          ],
+        );
+      },
+      child: widget.sidebarBuilder.call(),
+    );
+  }
+
+  Widget _sidebarAware({required _SidebarAwareBuilder builder, Widget? child}) {
+    return ValueListenableBuilder(
+      valueListenable: _sidebarWidthNotifier,
+      builder: (context, sidebarWidth, child_) {
+        return AnimatedBuilder(
+          animation: _sidebarShowController,
+          builder: (context, child_) {
+            final animatedSidebarWidth = Tween(
+              begin: 0.0,
+              end: sidebarWidth,
+            ).evaluate(_sidebarShowAnimation);
+            return builder.call(sidebarWidth, animatedSidebarWidth, child);
+          },
         );
       },
     );
   }
 
   Widget _sidebarResizeArea() {
-    const resizeAreaWidth = 2.0;
     return SizedBox(
-      width: resizeAreaWidth,
+      width: _resizeAreaWidth,
       child: MouseRegion(
         cursor: SystemMouseCursors.resizeLeftRight,
         child: GestureDetector(
@@ -213,14 +262,20 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
           dragStartBehavior: DragStartBehavior.down,
           supportedDevices: const {PointerDeviceKind.mouse},
           onHorizontalDragUpdate: (details) {
-            _sidebarWidthNotifier.value += details.primaryDelta!;
+            _sidebarWidthBeforeResizeCache ??= _sidebarWidthNotifier.value;
+            _sidebarWidthResizeDelta += details.primaryDelta!;
+            final newWidth =
+                (_sidebarWidthBeforeResizeCache ?? 0) +
+                _sidebarWidthResizeDelta;
+            if (newWidth > _minSidebarWidth) {
+              _sidebarWidthNotifier.value = newWidth;
+            }
           },
           onHorizontalDragEnd: (details) {
-            // setState(() {
-            //   _sidebarWidth += ;
-            // });
+            _sidebarWidthResizeDelta = 0;
+            _sidebarWidthBeforeResizeCache = null;
           },
-          onHorizontalDragCancel: () => setState(() {}),
+          // onHorizontalDragCancel: () => setState(() {}),
         ),
       ),
     );
@@ -228,7 +283,7 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
 
   Widget _sidebarIconButton() {
     return SizedBox.square(
-      dimension: 26.0,
+      dimension: _sidebarButtonSize,
       child: Align(
         child: IconButton(
           padding: EdgeInsets.zero,
@@ -239,9 +294,7 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
             ),
           ),
           onPressed: () {
-            setState(() {
-              _showSidebar = !_showSidebar;
-            });
+            _sidebarShowController.toggle();
           },
           icon: Icon(CupertinoIcons.sidebar_left, size: 18),
         ),

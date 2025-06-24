@@ -14,24 +14,18 @@ class TabData {
 class TabView extends StatefulWidget {
   const TabView({
     super.key,
-    this.tabPrefix,
     required this.selectedIndex,
-    required this.tabDataList,
-    required this.content,
+    required this.tabData,
     this.onClosed,
     this.onSelected,
     this.onCreated,
-    required this.hasSidebar,
   });
 
-  final List<TabData> tabDataList;
-  final Widget? tabPrefix;
+  final List<TabData> tabData;
   final int selectedIndex;
-  final Widget content;
   final void Function(int)? onClosed;
   final void Function(int)? onSelected;
   final void Function()? onCreated;
-  final bool hasSidebar;
 
   @override
   State<TabView> createState() => _TabViewState();
@@ -48,33 +42,22 @@ class _TabViewState extends State<TabView> {
 
   @override
   Widget build(BuildContext context) {
-    final tabPrefix = widget.tabPrefix;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
       children: [
-        _warpBar(
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              if (tabPrefix != null) _warpButton(tabPrefix),
-              if (tabPrefix != null) SizedBox(width: 8.0),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 2.0),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: _buildTabs(widget.tabDataList),
-                    ),
-                  ),
-                ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 2.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildTabs(widget.tabData),
               ),
-              SizedBox(width: 60),
-            ],
+            ),
           ),
         ),
-        Expanded(child: widget.content),
+        SizedBox(width: 60),
       ],
     );
   }
@@ -151,25 +134,7 @@ class _TabViewState extends State<TabView> {
         ),
       ),
     );
-
     return tabs;
-  }
-
-  Widget _warpBar(Widget widget) {
-    if (Platform.isMacOS) {
-      const tabBarMaxHeight = 38.0;
-      return Container(
-        padding:
-            this.widget.hasSidebar
-                ? EdgeInsets.only(left: 4.0)
-                : EdgeInsets.only(left: 80.0),
-        height: tabBarMaxHeight,
-        color: Color(0xFFe3e3e3),
-        child: MacosToolbarPassthroughScope(child: widget),
-      );
-    } else {
-      return widget;
-    }
   }
 
   Widget _warpButton(Widget widget) {
