@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dev_tools/features/scaffold/macos_scaffold.dart';
 import 'package:dev_tools/features/tabview/tabview.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
@@ -31,7 +32,18 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
       ),
-      home: const MyHomePage(),
+      home: Scaffold(
+        body: MacosDesktopScaffold(
+          style: MacosDesktopStyle(
+            toolbarHeight: 38.0,
+            toolbarBackgroundColor: Color(0xFFe3e3e3),
+            sidebarBackgroundColor: Color(0xFFe0e0e0),
+          ),
+          sidebarBuilder: () => Text('data'),
+          toolbar: Text('toolbar'),
+          content: Text('content out'),
+        ),
+      ),
     );
   }
 }
