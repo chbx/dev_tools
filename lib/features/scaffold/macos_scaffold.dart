@@ -6,7 +6,7 @@ import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 
 const double _redYellowGreenWidth = 80.0;
 const double _sidebarButtonSize = 26.0;
-const double _minSidebarWidth = 180;
+const double _minSidebarWidth = 210;
 const double _resizeAreaWidth = 3.0;
 
 class MacosDesktopStyle {
@@ -56,7 +56,7 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
     super.initState();
     _sidebarShowController = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: 2000),
+      duration: Duration(milliseconds: 400),
     );
     _sidebarShowAnimation = CurvedAnimation(
       parent: _sidebarShowController,
