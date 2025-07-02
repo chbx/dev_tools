@@ -184,11 +184,12 @@ class _TabButtonState extends State<TabButton> {
       bgColor = widget.hoverColor;
     }
 
+    final radius = 8.0;
     BorderRadius? borderRadius;
     if (widget.selected || WidgetState.hovered.isSatisfiedBy(_states)) {
       borderRadius = BorderRadius.only(
-        topLeft: Radius.circular(6),
-        topRight: Radius.circular(6),
+        topLeft: Radius.circular(radius),
+        topRight: Radius.circular(radius),
       );
     }
 
@@ -207,35 +208,103 @@ class _TabButtonState extends State<TabButton> {
             _states.remove(WidgetState.hovered);
           });
         },
-        child: AnimatedContainer(
+        child: _ColorAnimated(
           duration:
-              widget.selected ? Duration.zero : Duration(milliseconds: 150),
-          padding: EdgeInsets.symmetric(horizontal: 8.0),
-          decoration: BoxDecoration(color: bgColor, borderRadius: borderRadius),
-
-          child: Row(
-            children: [
-              ConstrainedBox(
-                constraints: BoxConstraints(minWidth: 80),
-                child: Text(widget.name),
-              ),
-              SizedBox.square(
-                dimension: 18,
-                child: IconButton(
-                  style: IconButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(2.0),
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(0.0),
-                  onPressed: widget.onClosed,
-                  icon: const Icon(Icons.close, size: 14),
+              widget.selected ? Duration.zero : Duration(milliseconds: 120),
+          color: bgColor,
+          borderRadius: borderRadius,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8.0),
+            child: Row(
+              children: [
+                ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: 80),
+                  child: Text(widget.name),
                 ),
-              ),
-            ],
+                SizedBox.square(
+                  dimension: 18,
+                  child: IconButton(
+                    style: IconButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(2.0),
+                      ),
+                    ),
+                    padding: const EdgeInsets.all(0.0),
+                    onPressed: widget.onClosed,
+                    icon: const Icon(Icons.close, size: 14),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ColorAnimated extends ImplicitlyAnimatedWidget {
+  const _ColorAnimated({
+    super.key,
+    required super.duration,
+
+    required this.color,
+    this.borderRadius,
+    required this.child,
+  });
+
+  final Color? color;
+  final BorderRadiusGeometry? borderRadius;
+  final Widget child;
+
+  @override
+  AnimatedWidgetBaseState<_ColorAnimated> createState() =>
+      _ColorAnimatedState();
+}
+
+class _ColorAnimatedState extends AnimatedWidgetBaseState<_ColorAnimated> {
+  late final ColorTween _color = ColorTween(
+    begin: widget.color,
+    end: widget.color,
+  );
+  BorderRadiusGeometry? _borderRadius;
+
+  @override
+  void initState() {
+    super.initState();
+    _borderRadius = widget.borderRadius;
+    controller.addStatusListener((AnimationStatus status) {
+      if (status.isCompleted) {
+        _borderRadius = widget.borderRadius;
+      }
+      if (_borderRadius == null && widget.borderRadius != null) {
+        _borderRadius = widget.borderRadius;
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _ColorAnimated oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    controller.forward(from: 0.0);
+  }
+
+  @override
+  void forEachTween(TweenVisitor<dynamic> visitor) {
+    _color
+      ..begin = _color.evaluate(animation)
+      ..end = widget.color;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Animation<double> animation = this.animation;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _color.evaluate(animation),
+        borderRadius: _borderRadius,
+      ),
+      child: widget.child,
     );
   }
 }
