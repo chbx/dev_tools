@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
       home: Scaffold(body: const MyHomePage()),
     );
@@ -153,6 +153,7 @@ class _MyHomePageState extends State<MyHomePage> {
             child: Column(
               children: [
                 Material(
+                  color: Colors.white,
                   child: ListTile(
                     // leading: Icon(Icons.add),
                     contentPadding: EdgeInsets.only(left: 4.0),
@@ -178,6 +179,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
                 SizedBox(height: 4.0),
                 Material(
+                  color: Colors.white,
                   child: ListTile(
                     // leading: Icon(Icons.add),
                     contentPadding: EdgeInsets.only(left: 4.0),
