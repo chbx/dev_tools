@@ -183,11 +183,16 @@ class _TabButtonState extends State<TabButton> {
 
     final radius = 6.0;
     BorderRadius? borderRadius;
-    if (widget.selected || WidgetState.hovered.isSatisfiedBy(_states)) {
+    EdgeInsetsGeometry? padding;
+    if (widget.selected) {
       borderRadius = BorderRadius.only(
         topLeft: Radius.circular(radius),
         topRight: Radius.circular(radius),
       );
+      padding = const EdgeInsets.only(top: 4.0);
+    } else if (WidgetState.hovered.isSatisfiedBy(_states)) {
+      borderRadius = BorderRadius.all(Radius.circular(radius));
+      padding = const EdgeInsets.symmetric(vertical: 5.0, horizontal: 4.0);
     }
 
     return GestureDetector(
@@ -207,23 +212,39 @@ class _TabButtonState extends State<TabButton> {
         },
         child: Stack(
           fit: StackFit.passthrough,
+          clipBehavior: Clip.none,
           children: [
+            Positioned(
+              left: -radius,
+              right: -radius,
+              bottom: 0,
+              child: SizedBox(
+                height: radius,
+                child:
+                    widget.selected
+                        ? CustomPaint(
+                          painter: InnerRoundedRectanglePainter(
+                            color:widget.selectColor,
+                            radius: radius,
+                          ),
+                        )
+                        : null,
+              ),
+            ),
             Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: _ColorAnimated(
-                  duration:
-                      widget.selected
-                          ? Duration.zero
-                          : Duration(milliseconds: 120),
-                  color: bgColor,
-                  borderRadius: borderRadius,
-                  child: SizedBox.shrink(),
-                ),
+              child: _ColorAnimated(
+                padding: padding,
+                duration:
+                    widget.selected
+                        ? Duration.zero
+                        : Duration(milliseconds: 120),
+                color: bgColor,
+                borderRadius: borderRadius,
+                child: SizedBox.shrink(),
               ),
             ),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              padding: EdgeInsets.only(left: 12.0, right: 8.0),
               child: Row(
                 children: [
                   ConstrainedBox(
@@ -259,12 +280,14 @@ class _ColorAnimated extends ImplicitlyAnimatedWidget {
     required super.duration,
 
     required this.color,
+    this.padding,
     this.borderRadius,
     required this.child,
   });
 
   final Color? color;
   final BorderRadiusGeometry? borderRadius;
+  final EdgeInsetsGeometry? padding;
   final Widget child;
 
   @override
@@ -278,17 +301,23 @@ class _ColorAnimatedState extends AnimatedWidgetBaseState<_ColorAnimated> {
     end: widget.color,
   );
   BorderRadiusGeometry? _borderRadius;
+  EdgeInsetsGeometry? _padding;
 
   @override
   void initState() {
     super.initState();
     _borderRadius = widget.borderRadius;
+    _padding = widget.padding;
     controller.addStatusListener((AnimationStatus status) {
       if (status.isCompleted) {
         _borderRadius = widget.borderRadius;
+        _padding = widget.padding;
       }
       if (_borderRadius == null && widget.borderRadius != null) {
         _borderRadius = widget.borderRadius;
+      }
+      if (_padding == null && widget.padding != null) {
+        _padding = widget.padding;
       }
     });
   }
@@ -309,12 +338,110 @@ class _ColorAnimatedState extends AnimatedWidgetBaseState<_ColorAnimated> {
   @override
   Widget build(BuildContext context) {
     final Animation<double> animation = this.animation;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _color.evaluate(animation),
-        borderRadius: _borderRadius,
+    return Padding(
+      padding: _padding ?? EdgeInsets.zero,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _color.evaluate(animation),
+          borderRadius: _borderRadius,
+        ),
+        child: widget.child,
       ),
-      child: widget.child,
     );
+  }
+}
+
+// ClipPath(
+//   clipper: InwardRoundedTopRectClipper(radius: radius),
+//   child: Container(color: Colors.red),
+// )
+class InwardRoundedTopRectClipper extends CustomClipper<Path> {
+  final double radius;
+
+  InwardRoundedTopRectClipper({required this.radius});
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+
+    // 从左上角圆弧结束点开始
+    path.moveTo(0, radius);
+
+    // 左上四分之一圆（向内切）
+    path.arcToPoint(
+      Offset(radius, 0),
+      radius: Radius.circular(radius),
+      clockwise: false,
+    );
+    path.lineTo(size.width - radius, 0);
+
+    // 右上四分之一圆（向内切）
+    path.arcToPoint(
+      Offset(size.width, radius),
+      radius: Radius.circular(radius),
+      clockwise: false,
+    );
+    // 右侧直线
+    path.lineTo(size.width, size.height);
+
+    // 底部直线
+    path.lineTo(0, size.height);
+
+    path.close();
+
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldCliper) {
+    return true;
+  }
+}
+
+class InnerRoundedRectanglePainter extends CustomPainter {
+  final Color color;
+  final double radius;
+  InnerRoundedRectanglePainter({required this.color, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill;
+
+    final path = Path();
+
+    // 从左上角圆弧结束点开始
+    path.moveTo(0, radius);
+
+    // 左上四分之一圆（向内切）
+    path.arcToPoint(
+      Offset(radius, 0),
+      radius: Radius.circular(radius),
+      clockwise: false,
+    );
+    path.lineTo(size.width - radius, 0);
+
+    // 右上四分之一圆（向内切）
+    path.arcToPoint(
+      Offset(size.width, radius),
+      radius: Radius.circular(radius),
+      clockwise: false,
+    );
+    // 右侧直线
+    path.lineTo(size.width, size.height);
+
+    // 底部直线
+    path.lineTo(0, size.height);
+
+    path.close();
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant InnerRoundedRectanglePainter old) {
+    return old.color != color || old.radius != radius;
   }
 }

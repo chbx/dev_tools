@@ -224,7 +224,7 @@ class _Toolbar extends StatelessWidget with _SidebarWidthBase {
                       style: style,
                       resizeArea: resizeArea,
                     ),
-                    const SizedBox(width: 8.0),
+                    const SizedBox(width: 6.0),
                     Expanded(child: customToolbar),
                   ],
                 ),
