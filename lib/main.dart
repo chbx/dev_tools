@@ -153,7 +153,7 @@ class _MyHomePageState extends State<MyHomePage> {
             child: Column(
               children: [
                 Material(
-                  color: Colors.white,
+                  color: Color(0xD3FFFFFF),
                   child: ListTile(
                     // leading: Icon(Icons.add),
                     contentPadding: EdgeInsets.only(left: 4.0),
@@ -179,7 +179,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
                 SizedBox(height: 4.0),
                 Material(
-                  color: Colors.white,
+                  color: Color(0xD3FFFFFF),
                   child: ListTile(
                     // leading: Icon(Icons.add),
                     contentPadding: EdgeInsets.only(left: 4.0),

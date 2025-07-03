@@ -46,14 +46,11 @@ class _TabViewState extends State<TabView> {
       mainAxisAlignment: MainAxisAlignment.start,
       children: [
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 2.0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: _buildTabs(widget.tabData),
-              ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: _buildTabs(widget.tabData),
             ),
           ),
         ),
@@ -184,7 +181,7 @@ class _TabButtonState extends State<TabButton> {
       bgColor = widget.hoverColor;
     }
 
-    final radius = 8.0;
+    final radius = 6.0;
     BorderRadius? borderRadius;
     if (widget.selected || WidgetState.hovered.isSatisfiedBy(_states)) {
       borderRadius = BorderRadius.only(
@@ -208,35 +205,48 @@ class _TabButtonState extends State<TabButton> {
             _states.remove(WidgetState.hovered);
           });
         },
-        child: _ColorAnimated(
-          duration:
-              widget.selected ? Duration.zero : Duration(milliseconds: 120),
-          color: bgColor,
-          borderRadius: borderRadius,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              children: [
-                ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: 80),
-                  child: Text(widget.name),
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: [
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: _ColorAnimated(
+                  duration:
+                      widget.selected
+                          ? Duration.zero
+                          : Duration(milliseconds: 120),
+                  color: bgColor,
+                  borderRadius: borderRadius,
+                  child: SizedBox.shrink(),
                 ),
-                SizedBox.square(
-                  dimension: 18,
-                  child: IconButton(
-                    style: IconButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(2.0),
-                      ),
-                    ),
-                    padding: const EdgeInsets.all(0.0),
-                    onPressed: widget.onClosed,
-                    icon: const Icon(Icons.close, size: 14),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              child: Row(
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: 80),
+                    child: Text(widget.name),
+                  ),
+                  SizedBox.square(
+                    dimension: 18,
+                    child: IconButton(
+                      style: IconButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(2.0),
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(0.0),
+                      onPressed: widget.onClosed,
+                      icon: const Icon(Icons.close, size: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

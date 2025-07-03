@@ -74,24 +74,8 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
 
   @override
   Widget build(BuildContext context) {
-    // BACKGROUND:
-    //   LEFT  (toolbar & sidebar same color)
-    //   RIGHT:  (boxShadow if sidebar exists)
-    //     toolbar
-    //     content
-    // FG:
-    //   TOP: toolbar (animated & adjustWidthArea & toolbarContent)
-    //   BOTTOM: (stack)
-    //     LEFT: sidebar (stack: sidebar & adjustWidthArea)
-    //     RIGHT: content
-
     return Stack(
       children: [
-        // _Background(
-        //   style: widget.style,
-        //   sidebarWidth: _sidebarWidthNotifier,
-        //   sidebarAnimation: _sidebarShowAnimation,
-        // ),
         Stack(
           children: [
             _Body(
@@ -109,7 +93,7 @@ class _MacosDesktopScaffoldState extends State<MacosDesktopScaffold>
                 style: widget.style,
                 sidebarWidth: _sidebarWidthNotifier,
                 sidebarAnimation: _sidebarShowAnimation,
-                customToobar: widget.toolbar,
+                customToolbar: widget.toolbar,
                 onSidebarButtonPressed: () {
                   _sidebarShowController.toggle();
                 },
@@ -161,6 +145,7 @@ typedef _SidebarAwareBuilder =
 
 mixin _SidebarWidthBase {
   ValueListenable<double> get sidebarWidth;
+
   CurvedAnimation get sidebarAnimation;
 
   Widget sidebarWidthBuilder({
@@ -191,7 +176,7 @@ class _Toolbar extends StatelessWidget with _SidebarWidthBase {
     required this.sidebarWidth,
     required this.sidebarAnimation,
     required this.style,
-    required this.customToobar,
+    required this.customToolbar,
     required this.onSidebarButtonPressed,
     required this.resizeArea,
   });
@@ -201,7 +186,7 @@ class _Toolbar extends StatelessWidget with _SidebarWidthBase {
   @override
   final CurvedAnimation sidebarAnimation;
   final MacosDesktopStyle style;
-  final Widget customToobar;
+  final Widget customToolbar;
   final VoidCallback onSidebarButtonPressed;
   final Widget resizeArea;
 
@@ -233,35 +218,14 @@ class _Toolbar extends StatelessWidget with _SidebarWidthBase {
                 child: Row(
                   children: [
                     MacosToolbarPassthrough(child: _sidebarIconButton()),
-                    sidebarWidthBuilder(
-                      builder: (sidebarWidth, animatedSidebarWidth, _) {
-                        final width =
-                            animatedSidebarWidth -
-                            _redYellowGreenWidth -
-                            _sidebarButtonSize;
-                        if (width <= 0) {
-                          return SizedBox.shrink();
-                        }
-                        final resize =
-                            sidebarAnimation.isCompleted &&
-                            width > _resizeAreaWidth;
-                        return SizedBox(
-                          width: width,
-                          height: style.toolbarHeight,
-                          child:
-                              resize
-                                  ? Align(
-                                    alignment: Alignment.centerRight,
-                                    child: MacosToolbarPassthrough(
-                                      child: resizeArea,
-                                    ),
-                                  )
-                                  : null,
-                        );
-                      },
+                    _ToolbarSpacer(
+                      sidebarWidth: sidebarWidth,
+                      sidebarAnimation: sidebarAnimation,
+                      style: style,
+                      resizeArea: resizeArea,
                     ),
-                    const SizedBox(width: 4.0),
-                    Expanded(child: customToobar),
+                    const SizedBox(width: 8.0),
+                    Expanded(child: customToolbar),
                   ],
                 ),
               ),
@@ -288,6 +252,52 @@ class _Toolbar extends StatelessWidget with _SidebarWidthBase {
           icon: Icon(CupertinoIcons.sidebar_left, size: 18),
         ),
       ),
+    );
+  }
+}
+
+class _ToolbarSpacer extends StatelessWidget with _SidebarWidthBase {
+  const _ToolbarSpacer({
+    super.key,
+    required this.sidebarWidth,
+    required this.sidebarAnimation,
+    required this.style,
+    required this.resizeArea,
+  });
+
+  @override
+  final ValueListenable<double> sidebarWidth;
+  @override
+  final CurvedAnimation sidebarAnimation;
+  final MacosDesktopStyle style;
+  final Widget resizeArea;
+
+  @override
+  Widget build(BuildContext context) {
+    return sidebarWidthBuilder(
+      builder: (sidebarWidth, animatedSidebarWidth, _) {
+        if (!sidebarAnimation.isAnimating) {
+          MacosToolbarPassthroughScope.maybeNotifyChangesOf(context)?.call();
+        }
+
+        final width =
+            animatedSidebarWidth - _redYellowGreenWidth - _sidebarButtonSize;
+        if (width <= 0) {
+          return SizedBox.shrink();
+        }
+        final resize = sidebarAnimation.isCompleted && width > _resizeAreaWidth;
+        return SizedBox(
+          width: width,
+          height: style.toolbarHeight,
+          child:
+              resize
+                  ? Align(
+                    alignment: Alignment.centerRight,
+                    child: MacosToolbarPassthrough(child: resizeArea),
+                  )
+                  : null,
+        );
+      },
     );
   }
 }
@@ -341,36 +351,31 @@ class _Body extends StatelessWidget with _SidebarWidthBase {
           );
         }
 
-        Widget content = Container(
-          color: Colors.white,
-          child: Column(
-            children: [
-              SizedBox(height: style.toolbarHeight),
-              Expanded(child: this.content),
-            ],
-          ),
-        );
+        List<BoxShadow>? boxShadow;
         if (animatedSidebarWidth > 0) {
-          content = DecoratedBox(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey,
-                  offset: Offset.zero,
-                  blurRadius: 0.5,
-                ),
-              ],
-            ),
-            child: content,
-          );
+          boxShadow = [
+            BoxShadow(color: Colors.grey, offset: Offset.zero, blurRadius: 0.5),
+          ];
         }
 
         return Stack(
           children: [
-            if (sidebar != null) sidebar,
+            sidebar ?? Container(),
             Positioned.fill(
               left: animatedSidebarWidth,
-              child: content, //  ColoredBox(color: Colors.red, child: content),
+              child: DecoratedBox(
+                decoration: BoxDecoration(boxShadow: boxShadow),
+                child: Container(
+                  color: Colors.white,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(height: style.toolbarHeight),
+                      Expanded(child: this.content),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ],
         );
