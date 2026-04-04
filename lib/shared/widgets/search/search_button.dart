@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../utils/utils.dart';
+import '../../../common/utils/utils.dart';
 import '../../theme/theme.dart';
 import '../common.dart';
 import '../text_field.dart';
