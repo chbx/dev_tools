@@ -4,11 +4,12 @@ import 'package:intl/intl.dart' as intl;
 import '../core/json_parser.dart';
 import '../core/json_parser_options.dart';
 import '../core/json_path.dart';
-import '../core/json_value.dart';
+import '../core/json_value.dart' as core;
+import '../model/json_value.dart';
 import '../model/viewer_options.dart';
-import '../view_model/json_value_vm.dart';
+import '../utils/convert.dart';
 
-void optimizeDisplayInfo(JsonValueVM jsonValue, JsonViewerOptions options) {
+void optimizeDisplayInfo(JsonValue jsonValue, JsonViewerOptions options) {
   _JsonValueDisplayOptimizer(
     context: jsonValue,
     options: options,
@@ -19,34 +20,34 @@ class _JsonValueDisplayOptimizer {
   _JsonValueDisplayOptimizer({required this.context, required this.options});
 
   final JsonViewerOptions options;
-  final JsonValueVM context;
+  final JsonValue context;
   final CashedParser _cashedParser = CashedParser();
 
-  void processTree(JsonValueVM jsonValue, {JsonObjectKeyVM? jsonKey}) {
+  void processTree(JsonValue jsonValue, {JsonObjectKey? jsonKey}) {
     try {
       switch (jsonValue) {
-        case JsonStringVM():
+        case JsonString():
           if (options.parseNestedJsonString) {
             _parseNestedString(jsonValue);
           }
           break;
-        case JsonNumberVM():
+        case JsonNumber():
           if (options.showDateHint) {
             _processDateHint(jsonValue, jsonKey);
           }
           break;
-        case NormalJsonObjectVM():
+        case NormalJsonObject():
           _processNormalObject(jsonValue);
           for (final entry in jsonValue.entryMap.entries) {
             processTree(entry.value,  jsonKey: entry.key);
           }
           break;
-        case JsonArrayVM():
+        case JsonArray():
           for (final element in jsonValue.elements) {
             processTree(element);
           }
           break;
-        case ExtendedJsonObjectVM():
+        case ExtendedJsonObject():
           for (final entry in jsonValue.entryMap.entries) {
             processTree(entry.value, jsonKey: entry.key);
           }
@@ -61,7 +62,7 @@ class _JsonValueDisplayOptimizer {
     }
   }
 
-  void _parseNestedString(JsonStringVM jsonValue) {
+  void _parseNestedString(JsonString jsonValue) {
     jsonValue.parsed = _parseNestedJsonString(
       rawText: jsonValue.rawText,
       text: jsonValue.value,
@@ -70,7 +71,7 @@ class _JsonValueDisplayOptimizer {
 
   bool _isNestedStart(String firstChar) => firstChar == '[' || firstChar == '{';
 
-  JsonValueVM? _parseNestedJsonString({
+  JsonValue? _parseNestedJsonString({
     required String rawText,
     required String? text,
   }) {
@@ -91,7 +92,7 @@ class _JsonValueDisplayOptimizer {
               final parsedValue = JsonParser.parse(text, options: parseOptions);
               // first char is '"', if parsing is successful,
               // the resulting value should be a JSON string
-              if (parsedValue is JsonString) {
+              if (parsedValue is core.JsonString) {
                 rawText = parsedValue.rawText;
                 text = parsedValue.value;
                 continue;
@@ -117,12 +118,12 @@ class _JsonValueDisplayOptimizer {
     }
 
     final parsedValue = JsonParser.parse(jsonString, options: parseOptions);
-    final parsedNestedStringVM = JsonValueVM.from(parsedValue);
-    optimizeDisplayInfo(parsedNestedStringVM, options);
-    return parsedNestedStringVM;
+    final parsedNested = convertJsonValue(parsedValue);
+    optimizeDisplayInfo(parsedNested, options);
+    return parsedNested;
   }
 
-  void _processNormalObject(NormalJsonObjectVM jsonValue) {
+  void _processNormalObject(NormalJsonObject jsonValue) {
     if (options.parseFastJsonRef) {
       _processFastJsonRef(jsonValue);
     }
@@ -133,13 +134,13 @@ class _JsonValueDisplayOptimizer {
 
   // [{"name":"张三"},{"$ref":"$[0]"}]
   // [{"name":"zs","rel":{"name":"lisi","rel":{"$ref":".."}}},{"$ref":"$[0].rel"}]
-  void _processFastJsonRef(NormalJsonObjectVM jsonValue) {
+  void _processFastJsonRef(NormalJsonObject jsonValue) {
     final entryMap = jsonValue.entryMap;
     if (entryMap.length != 1) {
       return;
     }
     final ref = getEntryMapValue(entryMap, r'$ref');
-    if (ref is! JsonStringVM) {
+    if (ref is! JsonString) {
       return;
     }
     final value = ref.getStringValue();
@@ -150,13 +151,13 @@ class _JsonValueDisplayOptimizer {
     jsonValue.ref = jsonPath.resolve(context);
   }
 
-  void _processNormalObjectShorForMoney(NormalJsonObjectVM jsonValue) {
+  void _processNormalObjectShorForMoney(NormalJsonObject jsonValue) {
     final entryMap = jsonValue.entryMap;
     if (entryMap.length == 2) {
       // {"cent": 0,"currency": "CNY"}
       final cent = getEntryMapValue(entryMap, 'cent');
       final currency = getEntryMapValue(entryMap, 'currency');
-      if (cent is JsonNumberVM && currency is JsonStringVM) {
+      if (cent is JsonNumber && currency is JsonString) {
         jsonValue.shortString = _buildMoneyShortString(cent, currency);
       }
     } else if (entryMap.length == 6) {
@@ -173,16 +174,16 @@ class _JsonValueDisplayOptimizer {
       if (_containsAllField(entryMap, fields)) {
         final cent = getEntryMapValue(entryMap, 'cent');
         final currency = getEntryMapValue(entryMap, 'currency');
-        if (cent is JsonNumberVM && currency is JsonStringVM) {
+        if (cent is JsonNumber && currency is JsonString) {
           jsonValue.shortString = _buildMoneyShortString(cent, currency);
         }
       }
     }
   }
 
-  String? _buildMoneyShortString(JsonNumberVM cent, JsonStringVM currency) {
+  String? _buildMoneyShortString(JsonNumber cent, JsonString currency) {
     final centValue = cent.value;
-    if (centValue is JsonNumberValueInt) {
+    if (centValue is core.JsonNumberValueInt) {
       final formatter = intl.NumberFormat('#,###0.##');
       final formatted = formatter.format(centValue.intValue / 100);
       final currencyStr = currency.getStringValue();
@@ -193,12 +194,12 @@ class _JsonValueDisplayOptimizer {
   }
 
   // {"date": 0, "time": 0}
-  void _processDateHint(JsonNumberVM jsonValue, JsonObjectKeyVM? jsonKey) {
+  void _processDateHint(JsonNumber jsonValue, JsonObjectKey? jsonKey) {
     if (jsonKey == null) {
       return;
     }
     final jsonNum = jsonValue.value;
-    if (jsonKey is JsonObjectKeyStringVM && jsonNum is JsonNumberValueInt) {
+    if (jsonKey is JsonObjectKeyString && jsonNum is core.JsonNumberValueInt) {
       final jsonKeyStr = jsonKey.value.getStringValue().toLowerCase();
       if (jsonKeyStr.contains('gmt') ||
           jsonKeyStr.contains('date') ||
@@ -233,7 +234,7 @@ class _JsonValueDisplayOptimizer {
 }
 
 bool _containsAllField(
-  Map<JsonObjectKeyStringVM, JsonValueVM> map,
+  Map<JsonObjectKeyString, JsonValue> map,
   List<String> fieldNames,
 ) {
   for (final fieldName in fieldNames) {
@@ -246,12 +247,12 @@ bool _containsAllField(
 }
 
 // TODO duplicate code
-JsonValueVM? getEntryMapValue(
-  Map<JsonObjectKeyStringVM, JsonValueVM> map,
+JsonValue? getEntryMapValue(
+  Map<JsonObjectKeyString, JsonValue> map,
   String keyValue,
 ) {
-  return map[JsonObjectKeyStringVM(
+  return map[JsonObjectKeyString(
     // TODO allAscii
-    JsonStringVM(rawText: '"$keyValue"', allAscii: false),
+    JsonString(rawText: '"$keyValue"', allAscii: false),
   )];
 }

@@ -9,7 +9,9 @@ import '../core/json_parser_options.dart';
 import '../model/tree_path.dart';
 import '../model/viewer_options.dart';
 import '../service/display_opt.dart';
-import '../view_model/json_value_vm.dart';
+import '../model/json_value.dart' as model;
+import '../utils/convert.dart';
+import '../utils/to_string.dart';
 import '../view_model/tree_node_data.dart';
 
 class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
@@ -44,7 +46,7 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   }
 
   JsonViewerData _parse(String text) {
-    JsonValueVM? jsonValueVM;
+    model.JsonValue? modelValue;
     String? errorMessage;
     try {
       if (text.isNotEmpty) {
@@ -55,8 +57,8 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
                 BackSlashEscapeType.onlyBackSlashAndDoubleQuote,
           ),
         );
-        jsonValueVM = JsonValueVM.from(jsonValue);
-        optimizeDisplayInfo(jsonValueVM, options);
+        modelValue = convertJsonValue(jsonValue);
+        optimizeDisplayInfo(modelValue, options);
       }
     } catch (e, stackTrace) {
       FlutterError.reportError(
@@ -66,19 +68,19 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
     }
 
     if (options.autoParsedRootString &&
-        jsonValueVM is JsonStringVM &&
-        jsonValueVM.parsed != null) {
-      jsonValueVM = jsonValueVM.parsed!;
+        modelValue is model.JsonString &&
+        modelValue.parsed != null) {
+      modelValue = modelValue.parsed!;
     }
 
     TreeSliverNode<TreeNodeData>? treeNode;
-    if (jsonValueVM != null) {
-      treeNode = buildTreeNodes(jsonValueVM);
+    if (modelValue != null) {
+      treeNode = buildTreeNodes(modelValue);
     }
 
     final viewData = JsonViewerData(
       text: text,
-      jsonValueVM: jsonValueVM,
+      jsonValue: modelValue,
       treeNode: treeNode,
       errorMessage: errorMessage,
     );
@@ -87,11 +89,11 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   }
 
   String? getTextContent() {
-    final jsonValue = _viewDataNotifier.value.jsonValueVM;
-    if (jsonValue == null) {
+    final value = _viewDataNotifier.value.jsonValue;
+    if (value == null) {
       return null;
     }
-    return JsonValueVM.toJsonString(jsonValue);
+    return jsonValueToString(value);
   }
 
   void collapseAll() {
@@ -113,7 +115,7 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
       );
       _viewDataNotifier.value = JsonViewerData(
         text: previousValue.text,
-        jsonValueVM: previousValue.jsonValueVM,
+        jsonValue: previousValue.jsonValue,
         treeNode: newTreeNode,
         errorMessage: previousValue.errorMessage,
       );
@@ -269,13 +271,13 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
 
 class JsonViewerData {
   final String text;
-  final JsonValueVM? jsonValueVM;
+  final model.JsonValue? jsonValue;
   final TreeSliverNode<TreeNodeData>? treeNode;
   final String? errorMessage;
 
   const JsonViewerData({
     required this.text,
-    this.jsonValueVM,
+    this.jsonValue,
     this.treeNode,
     this.errorMessage,
   });

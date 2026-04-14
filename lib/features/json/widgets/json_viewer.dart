@@ -9,7 +9,7 @@ import '../../../shared/theme/theme.dart';
 import '../../../shared/widgets/search/search_field.dart';
 import '../../../shared/widgets/search/search_theme.dart';
 import '../service/sliver_tree_helper.dart';
-import '../view_model/json_value_vm.dart';
+import '../model/json_value.dart';
 import '../view_model/tree_node_data.dart';
 import 'dynamic_width.dart';
 import 'json_viewer_controller.dart';
@@ -585,12 +585,12 @@ class _JsonViewerLine extends StatelessWidget {
     final contentJsonValue = node.content.ref;
     if (node.isExpanded &&
         contentJsonValue != null &&
-        contentJsonValue is NormalJsonObjectVM) {
+        contentJsonValue is NormalJsonObject) {
       final fastJsonRef = contentJsonValue.ref;
       if (fastJsonRef != null) {
         refExpand = GestureDetector(
           onTap: () {
-            final JsonValueVM treeNeedToShow;
+            final JsonValue treeNeedToShow;
             if (nodeData.showRef) {
               treeNeedToShow = contentJsonValue;
             } else {

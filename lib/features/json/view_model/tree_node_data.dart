@@ -2,7 +2,8 @@ import 'dart:collection';
 
 import 'package:flutter/widgets.dart';
 
-import 'json_value_vm.dart';
+import '../model/json_value.dart';
+import '../utils/to_string.dart';
 
 const _emptyArray = <TreeSliverNode<TreeNodeData>>[];
 
@@ -22,7 +23,7 @@ enum TreeNodeDataType {
 
 class TreeNodeData {
   final String text;
-  final JsonValueVM? ref;
+  final JsonValue? ref;
   final TreeNodeDataType type;
   final String? name;
   final bool isNameAllAscii;
@@ -70,7 +71,7 @@ class TreeNodeData {
 }
 
 TreeSliverNode<TreeNodeData> buildTreeNodes(
-  JsonValueVM jsonValue, {
+  JsonValue jsonValue, {
   bool defaultExpand = true,
 }) {
   final builder = _TreeSliverBuilder(defaultExpand);
@@ -109,8 +110,8 @@ class _TreeSliverBuilder {
   _TreeSliverBuilder(this._defaultExpand);
 
   TreeSliverNode<TreeNodeData> _doBuildTreeNodes(
-    JsonValueVM jsonValue, {
-    JsonObjectKeyVM? objectKey,
+    JsonValue jsonValue, {
+    JsonObjectKey? objectKey,
     bool comma = false,
   }) {
     bool keyAllAscii;
@@ -124,7 +125,7 @@ class _TreeSliverBuilder {
     }
 
     return switch (jsonValue) {
-      JsonNullVM() => TreeSliverNode(
+      JsonNull() => TreeSliverNode(
         TreeNodeData(
           jsonValue.rawText,
           type: TreeNodeDataType.literalNull,
@@ -135,7 +136,7 @@ class _TreeSliverBuilder {
         ),
         children: _emptyArray,
       ),
-      JsonBoolVM() => TreeSliverNode(
+      JsonBool() => TreeSliverNode(
         TreeNodeData(
           jsonValue.rawText,
           type:
@@ -149,7 +150,7 @@ class _TreeSliverBuilder {
         ),
         children: _emptyArray,
       ),
-      JsonNumberVM() => TreeSliverNode(
+      JsonNumber() => TreeSliverNode(
         TreeNodeData(
           jsonValue.rawText,
           type: TreeNodeDataType.number,
@@ -161,25 +162,25 @@ class _TreeSliverBuilder {
         ),
         children: _emptyArray,
       ),
-      JsonStringVM() => _doBuildTreeNodeString(
+      JsonString() => _doBuildTreeNodeString(
         jsonValue,
         comma: comma,
         prefix: keyString,
         keyAllAscii: keyAllAscii,
       ),
-      JsonArrayVM() => _doBuildTreeNodeArray(
+      JsonArray() => _doBuildTreeNodeArray(
         jsonValue,
         comma: comma,
         prefix: keyString,
         keyAllAscii: keyAllAscii,
       ),
-      NormalJsonObjectVM() => _doBuildTreeNodeNormalObject(
+      NormalJsonObject() => _doBuildTreeNodeNormalObject(
         jsonValue,
         comma: comma,
         prefix: keyString,
         keyAllAscii: keyAllAscii,
       ),
-      ExtendedJsonObjectVM() => _doBuildTreeNodeExtendedObject(
+      ExtendedJsonObject() => _doBuildTreeNodeExtendedObject(
         jsonValue,
         comma: comma,
         prefix: keyString,
@@ -189,7 +190,7 @@ class _TreeSliverBuilder {
   }
 
   TreeSliverNode<TreeNodeData> _doBuildTreeNodeString(
-    JsonStringVM jsonValue, {
+    JsonString jsonValue, {
     String? prefix,
     required bool keyAllAscii,
     bool comma = false,
@@ -200,7 +201,7 @@ class _TreeSliverBuilder {
     final parsed = jsonValue.parsed;
     if (parsed != null) {
       switch (parsed) {
-        case JsonArrayVM():
+        case JsonArray():
           children = _doBuildTreeNodeArrayElements(parsed.elements);
           final tail = TreeNodeData(
             ']',
@@ -213,7 +214,7 @@ class _TreeSliverBuilder {
           parsedStart = '[';
           parsedType = TreeNodeDataType.arrayStart;
           break;
-        case NormalJsonObjectVM():
+        case NormalJsonObject():
           children = _doBuildTreeNodeNormalObjectEntries(parsed.entryMap);
           final tail = TreeNodeData(
             '}',
@@ -226,7 +227,7 @@ class _TreeSliverBuilder {
           parsedStart = '{';
           parsedType = TreeNodeDataType.objectStart;
           break;
-        case ExtendedJsonObjectVM():
+        case ExtendedJsonObject():
           children = _doBuildTreeNodeExtendedObjectEntries(parsed.entryMap);
           final tail = TreeNodeData(
             '}',
@@ -261,7 +262,7 @@ class _TreeSliverBuilder {
   }
 
   TreeSliverNode<TreeNodeData> _doBuildTreeNodeArray(
-    JsonArrayVM jsonValue, {
+    JsonArray jsonValue, {
     String? prefix,
     required bool keyAllAscii,
     bool comma = false,
@@ -307,7 +308,7 @@ class _TreeSliverBuilder {
   }
 
   List<TreeSliverNode<TreeNodeData>> _doBuildTreeNodeArrayElements(
-    List<JsonValueVM> elements,
+    List<JsonValue> elements,
   ) {
     final children = <TreeSliverNode<TreeNodeData>>[];
     int idx = 1;
@@ -319,7 +320,7 @@ class _TreeSliverBuilder {
   }
 
   TreeSliverNode<TreeNodeData> _doBuildTreeNodeNormalObject(
-    NormalJsonObjectVM jsonValue, {
+    NormalJsonObject jsonValue, {
     String? prefix,
     required bool keyAllAscii,
     bool comma = false,
@@ -367,7 +368,7 @@ class _TreeSliverBuilder {
   }
 
   List<TreeSliverNode<TreeNodeData>> _doBuildTreeNodeNormalObjectEntries(
-    LinkedHashMap<JsonObjectKeyStringVM, JsonValueVM> entryMap,
+    LinkedHashMap<JsonObjectKeyString, JsonValue> entryMap,
   ) {
     final children = <TreeSliverNode<TreeNodeData>>[];
     int idx = 1;
@@ -386,7 +387,7 @@ class _TreeSliverBuilder {
   }
 
   TreeSliverNode<TreeNodeData> _doBuildTreeNodeExtendedObject(
-    ExtendedJsonObjectVM jsonValue, {
+    ExtendedJsonObject jsonValue, {
     String? prefix,
     bool comma = false,
     required bool keyAllAscii,
@@ -432,7 +433,7 @@ class _TreeSliverBuilder {
   }
 
   List<TreeSliverNode<TreeNodeData>> _doBuildTreeNodeExtendedObjectEntries(
-    LinkedHashMap<JsonObjectKeyVM, JsonValueVM> entryMap,
+    LinkedHashMap<JsonObjectKey, JsonValue> entryMap,
   ) {
     final children = <TreeSliverNode<TreeNodeData>>[];
     int idx = 1;
@@ -451,20 +452,20 @@ class _TreeSliverBuilder {
   }
 }
 
-({bool keyAllAscii, String keyString}) _toStringKey(JsonObjectKeyVM objectKey) {
+({bool keyAllAscii, String keyString}) _toStringKey(JsonObjectKey objectKey) {
   // todo objectKey - 扩展key类型展示不同样式
   final keyInfo = switch (objectKey) {
-    JsonObjectKeyStringVM() => (
+    JsonObjectKeyString() => (
       objectKey.value.allAscii,
       objectKey.value.rawText,
     ),
-    JsonObjectKeyNumberVM() => (true, objectKey.value.rawText),
-    JsonObjectKeyBoolVM() => (true, objectKey.value.rawText),
-    JsonObjectKeyNullVM() => (true, 'null'),
-    JsonObjectKeyObjectVM() => (
+    JsonObjectKeyNumber() => (true, objectKey.value.rawText),
+    JsonObjectKeyBool() => (true, objectKey.value.rawText),
+    JsonObjectKeyNull() => (true, 'null'),
+    JsonObjectKeyObject() => (
       // TODO 对象作为key，是否全部ascii字符
       false,
-      JsonValueVM.toJsonString(objectKey.value),
+      jsonValueToString(objectKey.value),
     ),
   };
   return (keyAllAscii: keyInfo.$1, keyString: keyInfo.$2);
