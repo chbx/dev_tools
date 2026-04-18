@@ -172,6 +172,14 @@ class TabButton extends StatefulWidget {
 class _TabButtonState extends State<TabButton> {
   final Set<WidgetState> _states = {};
 
+  bool prevSelect = false;
+
+  @override
+  void didUpdateWidget(covariant TabButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    prevSelect = oldWidget.selected;
+  }
+
   @override
   Widget build(BuildContext context) {
     Color? bgColor;
@@ -202,12 +210,14 @@ class _TabButtonState extends State<TabButton> {
           setState(() {
             widget.hoverIndexNotifier.value = widget.index;
             _states.add(WidgetState.hovered);
+            prevSelect = false;
           });
         },
         onExit: (event) {
           setState(() {
             widget.hoverIndexNotifier.value = null;
             _states.remove(WidgetState.hovered);
+            prevSelect = false;
           });
         },
         child: Stack(
@@ -224,7 +234,7 @@ class _TabButtonState extends State<TabButton> {
                     widget.selected
                         ? CustomPaint(
                           painter: InnerRoundedRectanglePainter(
-                            color:widget.selectColor,
+                            color: widget.selectColor,
                             radius: radius,
                           ),
                         )
@@ -235,9 +245,9 @@ class _TabButtonState extends State<TabButton> {
               child: _ColorAnimated(
                 padding: padding,
                 duration:
-                    widget.selected
+                    widget.selected || prevSelect
                         ? Duration.zero
-                        : Duration(milliseconds: 120),
+                        : Duration(milliseconds: 180),
                 color: bgColor,
                 borderRadius: borderRadius,
                 child: SizedBox.shrink(),
