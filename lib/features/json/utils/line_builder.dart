@@ -283,7 +283,17 @@ class _JsonLineBuilder {
       indentLevel: indent,
       lineType: lineType,
       tokens: tokens,
+      isBasicASCII: _checkBasicASCII(content),
     ));
+  }
+
+  /// Checks whether a string consists entirely of basic ASCII (printable characters, code points 32~126).
+  bool _checkBasicASCII(String text) {
+    for (int i = 0; i < text.length; i++) {
+      final code = text.codeUnitAt(i);
+      if (code < 32 || code > 126) return false;
+    }
+    return true;
   }
 
   String _objectKeyToString(JsonObjectKey key) {

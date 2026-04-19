@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../model/json_model.dart';
+import '../service/line_width_computer.dart';
 import 'view_line.dart';
 
 /// Maps Model lines to View lines.
@@ -9,6 +10,9 @@ class JsonViewModel extends ChangeNotifier {
 
   List<ViewLine> _viewLines = const [];
   List<ViewLine> get viewLines => _viewLines;
+
+  /// Width calculator, held by ViewModel, render config injected by View layer.
+  final LineWidthComputer lineWidthComputer = LineWidthComputer();
 
   void updateModel(JsonModel? model) {
     _model = model;
@@ -31,6 +35,15 @@ class JsonViewModel extends ChangeNotifier {
         modelLine: line,
       );
     });
+
+    // Line structure changed → invalidate all cache
+    lineWidthComputer.invalidateAll();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    lineWidthComputer.dispose();
+    super.dispose();
   }
 }

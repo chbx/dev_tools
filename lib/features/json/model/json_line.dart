@@ -36,11 +36,16 @@ class JsonLine {
   final JsonLineType lineType;
   final List<JsonLineToken> tokens;
 
+  /// Whether this line's text consists entirely of basic ASCII characters (code points 32~126).
+  /// Used for fast path determination in width calculation: pure ASCII + monospace font → pure math calculation, no TextPainter needed.
+  final bool isBasicASCII;
+
   const JsonLine({
     required this.lineNumber,
     required this.content,
     required this.indentLevel,
     required this.lineType,
     required this.tokens,
+    required this.isBasicASCII,
   });
 }

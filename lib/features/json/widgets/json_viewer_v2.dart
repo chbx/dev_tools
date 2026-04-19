@@ -32,24 +32,88 @@ class JsonViewerV2 extends StatefulWidget {
 }
 
 class _JsonViewerV2State extends State<JsonViewerV2> {
+  static const double _cacheExtent = 250.0;
+
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
-  // Cached content width to avoid recomputation on every rebuild.
-  double _cachedContentWidth = 0;
-  int _cachedViewLinesLength = -1;
+  /// Running maximum line width observed so far. Notifies listeners only when
+  /// the value grows, so the [SizedBox] rebuilds only when needed.
+  final ValueNotifier<double> _maxLineWidthNotifier = ValueNotifier<double>(0);
+
+  /// Cached viewport height from the last LayoutBuilder pass, used by the
+  /// scroll listener to compute the visible line range.
+  double _lastViewportHeight = 0;
+  double _lastRowHeight = 0;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _cachedViewLinesLength = -1;
+  void initState() {
+    super.initState();
+    _verticalController.addListener(_onVerticalScroll);
+    widget.viewModel.addListener(_onViewModelChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant JsonViewerV2 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewModel != widget.viewModel) {
+      oldWidget.viewModel.removeListener(_onViewModelChanged);
+      widget.viewModel.addListener(_onViewModelChanged);
+      _invalidateMaxWidth();
+    }
   }
 
   @override
   void dispose() {
+    _verticalController.removeListener(_onVerticalScroll);
+    widget.viewModel.removeListener(_onViewModelChanged);
+    _maxLineWidthNotifier.dispose();
     _verticalController.dispose();
     _horizontalController.dispose();
     super.dispose();
+  }
+
+  void _onVerticalScroll() {
+    // Measure newly visible lines and update the notifier if width grows.
+    _measureMaxLineWidth();
+  }
+
+  void _onViewModelChanged() {
+    _invalidateMaxWidth();
+  }
+
+  void _invalidateMaxWidth() {
+    _maxLineWidthNotifier.value = 0;
+  }
+
+  /// Measures the visible line range and updates [_maxLineWidthNotifier]
+  /// only when a wider line is found.
+  void _measureMaxLineWidth() {
+    final viewLines = widget.viewModel.viewLines;
+    final computer = widget.viewModel.lineWidthComputer;
+    final rowHeight = _lastRowHeight;
+    if (rowHeight <= 0 || viewLines.isEmpty) return;
+
+    final scrollOffset = _verticalController.hasClients
+        ? _verticalController.offset
+        : 0.0;
+
+    final layoutStart = (scrollOffset - _cacheExtent).clamp(0.0, double.infinity);
+    final layoutEnd = scrollOffset + _lastViewportHeight + _cacheExtent;
+
+    final firstIndex = (layoutStart / rowHeight).floor().clamp(0, viewLines.length - 1);
+    final lastIndex = (layoutEnd / rowHeight).ceil().clamp(0, viewLines.length - 1);
+
+    double currentMax = _maxLineWidthNotifier.value;
+    for (int i = firstIndex; i <= lastIndex; i++) {
+      final lineWidth = computer.getLineWidth(viewLines[i]);
+      if (lineWidth > currentMax) {
+        currentMax = lineWidth;
+      }
+    }
+
+    // ValueNotifier only notifies when value actually changes
+    _maxLineWidthNotifier.value = currentMax;
   }
 
   @override
@@ -63,12 +127,29 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
           return const SizedBox.shrink();
         }
 
+        // ① Inject render config on every build (internally checks if changed)
+        final computer = widget.viewModel.lineWidthComputer;
+        final configChanged = computer.updateRenderConfig(
+          baseTextStyle: widget.textStyle,
+          indentWidth: widget.themeData.indentWidth,
+          prefixWidth: widget.themeData.prefixWidth,
+        );
+        if (configChanged) {
+          _invalidateMaxWidth();
+        }
+
         return LayoutBuilder(
           builder: (context, constraints) {
-            if (viewLines.length != _cachedViewLinesLength) {
-              _cachedContentWidth = _estimateMaxWidth(viewLines, constraints.maxWidth);
-              _cachedViewLinesLength = viewLines.length;
-            }
+            final rowHeight = widget.themeData.defaultRowHeight;
+
+            // Cache layout params for the scroll listener
+            _lastViewportHeight = constraints.maxHeight;
+            _lastRowHeight = rowHeight;
+
+            // ② Measure visible lines and update notifier
+            _measureMaxLineWidth();
+
+            // ③ Only the SizedBox rebuilds when content width changes.
             return Scrollbar(
               thumbVisibility: true,
               controller: _verticalController,
@@ -82,14 +163,23 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   controller: _horizontalController,
-                  child: SizedBox(
-                    width: _cachedContentWidth,
-                    height: constraints.maxHeight,
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _maxLineWidthNotifier,
+                    builder: (context, maxLineWidth, child) {
+                      final effectiveWidth =
+                          math.max(maxLineWidth + 20, constraints.maxWidth);
+                      return SizedBox(
+                        width: effectiveWidth,
+                        height: constraints.maxHeight,
+                        child: child,
+                      );
+                    },
                     child: SelectionArea(
                       child: DefaultTextStyle(
                         style: widget.textStyle,
                         child: CustomScrollView(
                           key: PageStorageKey(widget.scrollIdV),
+                          cacheExtent: _cacheExtent,
                           scrollBehavior: ScrollConfiguration.of(context)
                               .copyWith(scrollbars: false),
                           controller: _verticalController,
@@ -99,7 +189,7 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
                                 child: SizedBox(height: media.padding.top),
                               ),
                             SliverFixedExtentList.builder(
-                              itemExtent: widget.themeData.defaultRowHeight,
+                              itemExtent: rowHeight,
                               itemCount: viewLines.length,
                               itemBuilder: (context, index) {
                                 return _JsonViewLineWidget(
@@ -120,24 +210,6 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
         );
       },
     );
-  }
-
-  // TODO
-  double _estimateMaxWidth(List<ViewLine> viewLines, double viewportWidth) {
-    final themeData = widget.themeData;
-    double maxWidth = 0;
-    final sampleStep = viewLines.length > 1000 ? viewLines.length ~/ 500 : 1;
-
-    for (int i = 0; i < viewLines.length; i += sampleStep) {
-      final line = viewLines[i].modelLine;
-      final indentWidth = themeData.prefixWidth + line.indentLevel * themeData.indentWidth;
-      final charWidth = themeData.fontSize * 0.6;
-      final textWidth = line.content.length * charWidth;
-      final lineWidth = indentWidth + textWidth + 20;
-      maxWidth = math.max(maxWidth, lineWidth);
-    }
-
-    return math.max(maxWidth, viewportWidth);
   }
 }
 
