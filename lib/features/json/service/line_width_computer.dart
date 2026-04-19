@@ -51,8 +51,13 @@ class LineWidthComputer {
 
   /// Gets the pixel width of a single line (including indent and prefix).
   /// Reads from cache first; calculates and caches on miss.
+  ///
+  /// The cache key encodes both the model line number and the collapsed state,
+  /// because a collapsed line renders different content than an expanded one.
   double getLineWidth(ViewLine viewLine) {
-    final key = viewLine.modelLineNumber;
+    final key = viewLine.isCollapsedStart
+        ? -viewLine.modelLineNumber - 1 // negative key for collapsed state
+        : viewLine.modelLineNumber;
     final cached = _cache[key];
     if (cached != null) return cached;
 
@@ -88,11 +93,63 @@ class LineWidthComputer {
     final line = viewLine.modelLine;
     final indentPixels = _prefixWidth + line.indentLevel * _indentWidth;
 
+    if (viewLine.isCollapsedStart) {
+      return _computeCollapsedWidth(line, indentPixels);
+    }
+
     if (line.isBasicASCII) {
       return _computeFast(line, indentPixels);
     } else {
       return _computeFull(line, indentPixels);
     }
+  }
+
+  /// Computes width for a collapsed container line.
+  ///
+  /// When collapsed, the rendered content differs from the model tokens:
+  /// - Parsed JSON containers show: key/colon prefix + rawText
+  /// - Normal containers show: key/colon prefix + `{ ...N }`
+  double _computeCollapsedWidth(JsonLine line, double indentPixels) {
+    // Collect prefix tokens (everything before the opening bracket).
+    final prefixTokens = <JsonLineToken>[];
+    for (final token in line.tokens) {
+      if (token.type == JsonTokenType.bracket) break;
+      prefixTokens.add(token);
+    }
+
+    if (line.parsedFromRawText != null) {
+      // Parsed JSON: displays prefix tokens + rawText.
+      // rawText may contain non-ASCII characters → use TextPainter.
+      final spans = <TextSpan>[
+        for (final token in prefixTokens)
+          TextSpan(text: token.text, style: _baseTextStyle),
+        TextSpan(text: line.parsedFromRawText!, style: _baseTextStyle),
+      ];
+      final textWidth = _measureSpansWidth(spans);
+      return indentPixels + textWidth;
+    } else {
+      // Normal container: displays "{ ...N }" or "[ ...N ]".
+      final closeBracket =
+          line.lineType == JsonLineType.objectStart ? '}' : ']';
+      final count = line.childCount;
+      final countText = count != null ? ' ...$count ' : ' ... ';
+      int prefixCharCount = 0;
+      for (final token in prefixTokens) {
+        prefixCharCount += token.text.length;
+      }
+      // openBracket + countText + closeBracket
+      final collapsedTextLength =
+          prefixCharCount + 1 + countText.length + closeBracket.length;
+      return indentPixels + collapsedTextLength * _monoCharWidth;
+    }
+  }
+
+  /// Measures actual render width of a list of TextSpans.
+  double _measureSpansWidth(List<TextSpan> spans) {
+    _textPainter ??= TextPainter(textDirection: ui.TextDirection.ltr);
+    _textPainter!.text = TextSpan(children: spans);
+    _textPainter!.layout();
+    return _textPainter!.width;
   }
 
   /// Fast path: pure ASCII + monospace font → pure math calculation.

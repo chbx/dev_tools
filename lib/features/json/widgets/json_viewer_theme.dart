@@ -95,6 +95,7 @@ class JsonViewerColorTheme {
     required this.colon,
     required this.comma,
     required this.indentLine,
+    required this.foldExpandButton,
     required this.foldForeground,
     required this.foldBackground,
     required this.findMatchBackground,
@@ -112,6 +113,7 @@ class JsonViewerColorTheme {
   final Color colon;
   final Color comma;
   final Color indentLine;
+  final Color foldExpandButton;
   final Color foldForeground;
   final Color foldBackground;
   final Color findMatchBackground;
@@ -131,6 +133,7 @@ const defaultColorThemeData = JsonViewerColorTheme(
   colon: Color(0xFF3b3b3b),
   comma: Color(0xFF3b3b3b),
   indentLine: _defaultIndentLineColor,
+  foldExpandButton: Color(0xFFA0A0A0),
   foldForeground: Color(0xFF808080),
   foldBackground: Color.fromRGBO(0xd4, 0xd4, 0xd4, 0.25),
   findMatchBackground: Color.fromRGBO(234, 92, 0, 0.33),

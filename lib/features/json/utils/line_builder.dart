@@ -104,6 +104,7 @@ class _JsonLineBuilder {
             comma: comma,
             keyString: keyString,
             bracketDepth: bracketDepth,
+            parsedFromRawText: value.rawText,
           );
           return;
         case NormalJsonObject():
@@ -114,6 +115,7 @@ class _JsonLineBuilder {
             keyString: keyString,
             bracketDepth: bracketDepth,
             keyExtractor: (JsonObjectKeyString key) => key.value.rawText,
+            parsedFromRawText: value.rawText,
           );
           return;
         case ExtendedJsonObject():
@@ -124,6 +126,7 @@ class _JsonLineBuilder {
             keyString: keyString,
             bracketDepth: bracketDepth,
             keyExtractor: _objectKeyToString,
+            parsedFromRawText: value.rawText,
           );
           return;
         default:
@@ -147,6 +150,7 @@ class _JsonLineBuilder {
     required bool comma,
     String? keyString,
     required int bracketDepth,
+    String? parsedFromRawText,
   }) {
     final depth = bracketDepth;
     if (value.elements.isEmpty) {
@@ -165,6 +169,8 @@ class _JsonLineBuilder {
     _addLine(
       indent: indent,
       lineType: JsonLineType.arrayStart,
+      childCount: value.elements.length,
+      parsedFromRawText: parsedFromRawText,
       tokens: [
         ..._keyTokens(keyString),
         JsonLineToken('[', JsonTokenType.bracket, bracketDepth: depth),
@@ -197,6 +203,7 @@ class _JsonLineBuilder {
     String? keyString,
     required int bracketDepth,
     required String Function(T key) keyExtractor,
+    String? parsedFromRawText,
   }) {
     final depth = bracketDepth;
     if (entryMap.isEmpty) {
@@ -215,6 +222,8 @@ class _JsonLineBuilder {
     _addLine(
       indent: indent,
       lineType: JsonLineType.objectStart,
+      childCount: entryMap.length,
+      parsedFromRawText: parsedFromRawText,
       tokens: [
         ..._keyTokens(keyString),
         JsonLineToken('{', JsonTokenType.bracket, bracketDepth: depth),
@@ -275,6 +284,8 @@ class _JsonLineBuilder {
     required int indent,
     required JsonLineType lineType,
     required List<JsonLineToken> tokens,
+    int? childCount,
+    String? parsedFromRawText,
   }) {
     final content = tokens.map((t) => t.text).join();
     _lines.add(JsonLine(
@@ -284,6 +295,8 @@ class _JsonLineBuilder {
       lineType: lineType,
       tokens: tokens,
       isBasicASCII: _checkBasicASCII(content),
+      childCount: childCount,
+      parsedFromRawText: parsedFromRawText,
     ));
   }
 

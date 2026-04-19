@@ -109,11 +109,18 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   }
 
   void collapseAll() {
-    // treeSliverController.collapseAll() 当数据量很大时有性能问题
+    // V2 path: collapse via the three-layer model.
+    _viewModel.collapseAll();
+
+    // V1 path: rebuild the TreeSliverNode tree.
     _rebuildViewData(defaultExpand: false);
   }
 
   void expandAll() {
+    // V2 path.
+    _viewModel.expandAll();
+
+    // V1 path.
     _rebuildViewData(defaultExpand: true);
   }
 

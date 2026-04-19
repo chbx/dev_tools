@@ -10,7 +10,7 @@ import 'json_viewer_theme.dart';
 /// Three-layer architecture View for the JSON viewer.
 ///
 /// Uses SliverList.builder instead of TreeSliver.
-/// Phase 1: basic rendering skeleton, fully expanded, no collapse/search.
+/// Phase 2: supports collapse/expand on container nodes.
 class JsonViewerV2 extends StatefulWidget {
   const JsonViewerV2({
     super.key,
@@ -195,6 +195,14 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
                                 return _JsonViewLineWidget(
                                   viewLine: viewLines[index],
                                   themeData: widget.themeData,
+                                  onToggleCollapse:
+                                      _canToggle(viewLines[index])
+                                          ? () =>
+                                              widget.viewModel.toggleCollapse(
+                                                viewLines[index]
+                                                    .modelLineNumber,
+                                              )
+                                          : null,
                                 );
                               },
                             ),
@@ -211,34 +219,187 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
       },
     );
   }
+
+  bool _canToggle(ViewLine vl) {
+    final lt = vl.modelLine.lineType;
+    return lt == JsonLineType.objectStart || lt == JsonLineType.arrayStart;
+  }
 }
 
 class _JsonViewLineWidget extends StatelessWidget {
   const _JsonViewLineWidget({
     required this.viewLine,
     required this.themeData,
+    required this.onToggleCollapse,
   });
 
   final ViewLine viewLine;
   final JsonViewerThemeData themeData;
+  final VoidCallback? onToggleCollapse;
 
   @override
   Widget build(BuildContext context) {
     final line = viewLine.modelLine;
     final textStyleTheme = themeData.textStyle;
+    final isContainerStart =
+        line.lineType == JsonLineType.objectStart ||
+        line.lineType == JsonLineType.arrayStart;
+    final isCollapsed = viewLine.isCollapsedStart;
+
+    // Base row: prefix + indent guides + text content.
+    final row = Row(
+      children: [
+        SizedBox(width: themeData.prefixWidth),
+        ..._buildIndent(line.indentLevel),
+        if (isCollapsed)
+          line.parsedFromRawText != null
+              ? _buildCollapsedParsedContent(line, textStyleTheme)
+              : _buildCollapsedContent(line, textStyleTheme)
+        else
+          Text.rich(
+            TextSpan(children: _buildTokenSpans(line, textStyleTheme)),
+          ),
+      ],
+    );
+
+    if (!isContainerStart) {
+      return SizedBox(height: themeData.defaultRowHeight, child: row);
+    }
+
+    // Arrow overlaid on the last indent column via Stack.
+    // Text starts at prefixWidth + indentLevel * indentWidth;
+    // arrow sits one indentWidth before that.
+    final arrowLeft =
+        themeData.prefixWidth +
+        line.indentLevel * themeData.indentWidth -
+         themeData.fontSize - 2;
 
     return SizedBox(
       height: themeData.defaultRowHeight,
-      child: Row(
+      child: Stack(
         children: [
-          SizedBox(width: themeData.prefixWidth),
-          ..._buildIndent(line.indentLevel),
-          Text.rich(
-            TextSpan(children: _buildTokenSpans(line, textStyleTheme)),
+          row,
+          Positioned(
+            left: arrowLeft.clamp(0, double.infinity),
+            top: 0,
+            bottom: 0,
+            // width: themeData.indentWidth,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: onToggleCollapse,
+                behavior: HitTestBehavior.opaque,
+                child: Center(
+                  child: Icon(
+                    isCollapsed
+                        ? Icons.chevron_right
+                        : Icons.expand_more,
+                    size: 16,
+                    color: themeData.color.foldExpandButton,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  /// Builds the collapsed line content: key/colon rendered normally,
+  /// then open bracket + " ...N " + close bracket wrapped in foldBackground.
+  Widget _buildCollapsedContent(
+    JsonLine line,
+    JsonViewerTextStyle textStyleTheme,
+  ) {
+    final closeBracket = line.lineType == JsonLineType.objectStart ? '}' : ']';
+    final count = line.childCount;
+    final countText = count != null ? ' ...$count ' : ' ... ';
+
+    // Find the bracket token to reuse its bracketDepth for consistent coloring.
+    final bracketToken = line.tokens.whereType<JsonLineToken>().where(
+      (t) => t.type == JsonTokenType.bracket,
+    );
+    final bracketStyle =
+        bracketToken.isNotEmpty
+            ? _getBracketStyle(
+              textStyleTheme.brackets,
+              bracketToken.first.bracketDepth,
+            )
+            : null;
+
+    // Key/colon spans rendered without background.
+    final prefixSpans = <InlineSpan>[];
+    // Bracket + summary spans rendered with fold background.
+    final foldSpans = <InlineSpan>[];
+
+    for (final token in line.tokens) {
+      if (token.type == JsonTokenType.bracket) {
+        foldSpans.add(TextSpan(text: token.text, style: bracketStyle));
+        break;
+      }
+      prefixSpans.add(
+        TextSpan(
+          text: token.text,
+          style: _getTokenStyle(token, textStyleTheme, line.indentLevel),
+        ),
+      );
+    }
+    foldSpans.add(
+      TextSpan(text: countText, style: textStyleTheme.foldForeground),
+    );
+    foldSpans.add(TextSpan(text: closeBracket, style: bracketStyle));
+
+    final List<Widget> children = [];
+
+    // Key/colon part (no background).
+    if (prefixSpans.isNotEmpty) {
+      children.add(Text.rich(TextSpan(children: prefixSpans)));
+    }
+
+    // Bracket + summary part (fold background, tappable with pointer cursor).
+    const cursor = SystemMouseCursors.click;
+    children.add(
+      MouseRegion(
+        cursor: cursor,
+        child: DefaultSelectionStyle.merge(
+          mouseCursor: cursor,
+          child: GestureDetector(
+            onTap: onToggleCollapse,
+            behavior: HitTestBehavior.opaque,
+            child: ColoredBox(
+              color: themeData.color.foldBackground,
+              child: Text.rich(TextSpan(children: foldSpans)),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Row(mainAxisSize: MainAxisSize.min, children: children);
+  }
+
+  /// Builds collapsed content for a parsed nested JSON string container.
+  /// Renders the original raw string text as a plain string value.
+  Widget _buildCollapsedParsedContent(
+    JsonLine line,
+    JsonViewerTextStyle textStyleTheme,
+  ) {
+    final rawText = line.parsedFromRawText!;
+
+    final spans = <InlineSpan>[];
+    for (final token in line.tokens) {
+      if (token.type == JsonTokenType.bracket) break;
+      spans.add(
+        TextSpan(
+          text: token.text,
+          style: _getTokenStyle(token, textStyleTheme, line.indentLevel),
+        ),
+      );
+    }
+    spans.add(TextSpan(text: rawText, style: textStyleTheme.string));
+
+    return Text.rich(TextSpan(children: spans));
   }
 
   List<Widget> _buildIndent(int indentLevel) {
@@ -249,9 +410,7 @@ class _JsonViewLineWidget extends StatelessWidget {
         height: themeData.defaultRowHeight,
         width: themeData.indentWidth,
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(left: border),
-          ),
+          decoration: BoxDecoration(border: Border(left: border)),
         ),
       );
     });

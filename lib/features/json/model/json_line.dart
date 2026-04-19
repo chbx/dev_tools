@@ -40,6 +40,15 @@ class JsonLine {
   /// Used for fast path determination in width calculation: pure ASCII + monospace font → pure math calculation, no TextPainter needed.
   final bool isBasicASCII;
 
+  /// For container start lines (objectStart / arrayStart), the number of
+  /// direct children.  `null` for all other line types.
+  final int? childCount;
+
+  /// Non-null when this container-start line was generated from a parsed
+  /// nested JSON string.  Stores the original raw string text (e.g.
+  /// `"[1,2,3]"`) so the View can display it when the container is collapsed.
+  final String? parsedFromRawText;
+
   const JsonLine({
     required this.lineNumber,
     required this.content,
@@ -47,5 +56,7 @@ class JsonLine {
     required this.lineType,
     required this.tokens,
     required this.isBasicASCII,
+    this.childCount,
+    this.parsedFromRawText,
   });
 }
