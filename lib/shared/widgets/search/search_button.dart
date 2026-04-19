@@ -59,11 +59,11 @@ class SearchNavigationControls extends StatelessWidget {
                 ),
                 InputDecorationSuffixButton(
                   icon: Icons.keyboard_arrow_up,
-                  onPressed: numMatches > 1 ? controller.previousMatch : null,
+                  onPressed: numMatches > 0 ? controller.previousMatch : null,
                 ),
                 InputDecorationSuffixButton(
                   icon: Icons.keyboard_arrow_down,
-                  onPressed: numMatches > 1 ? controller.nextMatch : null,
+                  onPressed: numMatches > 0 ? controller.nextMatch : null,
                 ),
                 InputDecorationSuffixButton.close(
                   onPressed: () {
