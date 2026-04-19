@@ -38,21 +38,22 @@ class JsonViewerPage extends StatelessWidget {
             data: media.copyWith(
               padding: media.padding.copyWith(top: menuBarHeight),
             ),
-            child: _useV2
-                ? _buildV2Viewer(context, menuBarHeight)
-                : JsonViewer(
-                    themeData: JsonViewerThemeData(
-                      color: defaultColorThemeData,
-                      prefixWidth: 28.0,
-                      indentWidth: 24.0,
-                      fontFamily: 'Menlo',
-                      fontSize: 14.0,
-                      spaceAfterIcon: 4,
+            child:
+                _useV2
+                    ? _buildV2Viewer(context, menuBarHeight)
+                    : JsonViewer(
+                      themeData: JsonViewerThemeData(
+                        color: defaultColorThemeData,
+                        prefixWidth: 28.0,
+                        indentWidth: 24.0,
+                        fontFamily: 'Menlo',
+                        fontSize: 14.0,
+                        spaceAfterIcon: 4,
+                      ),
+                      controller: jsonViewerController,
+                      scrollIdH: scrollIdH,
+                      scrollIdV: scrollIdV,
                     ),
-                    controller: jsonViewerController,
-                    scrollIdH: scrollIdH,
-                    scrollIdV: scrollIdV,
-                  ),
           ),
           Positioned(
             left: 0.0,
@@ -197,6 +198,32 @@ class MenuBar extends StatelessWidget {
             },
             tooltip: 'Collapse All',
             icon: Icon(Icons.unfold_less_rounded),
+          ),
+          SizedBox(width: 4),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(width: 1, color: Colors.grey[400]!),
+              ),
+            ),
+            child: SizedBox(height: 14),
+          ),
+          SizedBox(width: 4),
+          ListenableBuilder(
+            listenable: jsonViewerController.viewModel,
+            builder: (context, _) {
+              final isSoftWrap = jsonViewerController.viewModel.softWrap;
+              return IconMenuButton(
+                onPressed: () {
+                  jsonViewerController.viewModel.toggleSoftWrap();
+                },
+                tooltip: isSoftWrap ? 'Disable Word Wrap' : 'Enable Word Wrap',
+                icon: Icon(
+                  Icons.wrap_text_rounded,
+                  color: isSoftWrap ? Colors.blue : null,
+                ),
+              );
+            },
           ),
         ],
       ),

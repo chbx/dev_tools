@@ -2,7 +2,6 @@ import '../model/json_line.dart';
 
 /// A view-line projected from a [JsonLine].
 class ViewLine {
-  // TODO: redundant with modelLineNumber in Phase 1, meaningful after Phase 3 soft-wrap
   final int viewLineNumber;
   final int modelLineNumber;
   final JsonLine modelLine;
@@ -10,10 +9,22 @@ class ViewLine {
   /// `true` when this line is a container-start whose body is collapsed.
   final bool isCollapsedStart;
 
-  const ViewLine({
+  /// `true` when this view line is a continuation of a soft-wrapped model line
+  /// (i.e. the 2nd, 3rd, ... visual line produced by a single model line).
+  final bool isWrappedContinuation;
+
+  /// Tokens to render on this specific view line.
+  ///
+  /// For non-wrapped lines this equals [modelLine.tokens].
+  /// For wrapped lines this is a subset / slice of the original tokens.
+  final List<JsonLineToken> displayTokens;
+
+  ViewLine({
     required this.viewLineNumber,
     required this.modelLineNumber,
     required this.modelLine,
     this.isCollapsedStart = false,
-  });
+    this.isWrappedContinuation = false,
+    List<JsonLineToken>? displayTokens,
+  }) : displayTokens = displayTokens ?? modelLine.tokens;
 }

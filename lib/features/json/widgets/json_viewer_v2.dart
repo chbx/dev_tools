@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../model/json_line.dart';
 import '../view_model/json_view_model.dart';
@@ -10,7 +11,7 @@ import 'json_viewer_theme.dart';
 /// Three-layer architecture View for the JSON viewer.
 ///
 /// Uses SliverList.builder instead of TreeSliver.
-/// Phase 2: supports collapse/expand on container nodes.
+/// Phase 3: supports collapse/expand and soft-wrap.
 class JsonViewerV2 extends StatefulWidget {
   const JsonViewerV2({
     super.key,
@@ -46,6 +47,10 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
   double _lastViewportHeight = 0;
   double _lastRowHeight = 0;
 
+  // Viewport-width synchronisation for soft-wrap.
+  double _lastSyncedWidth = -1;
+  bool _pendingWidthSync = false;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +65,8 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
       oldWidget.viewModel.removeListener(_onViewModelChanged);
       widget.viewModel.addListener(_onViewModelChanged);
       _invalidateMaxWidth();
+      // Reset so _syncViewportWidth re-fires for the new ViewModel.
+      _lastSyncedWidth = -1;
     }
   }
 
@@ -116,6 +123,25 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
     _maxLineWidthNotifier.value = currentMax;
   }
 
+  /// Deferred viewport-width sync: schedules a post-frame callback so that
+  /// [JsonViewModel.updateSoftWrapConfig] (which may call notifyListeners) is
+  /// never invoked during the build/layout phase.
+  void _syncViewportWidth(double width) {
+    if (width == _lastSyncedWidth || _pendingWidthSync) return;
+    _pendingWidthSync = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _pendingWidthSync = false;
+      if (!mounted) return;
+      _lastSyncedWidth = width;
+      widget.viewModel.updateSoftWrapConfig(
+        softWrap: widget.viewModel.softWrap,
+        viewportWidth: width,
+        textStyle: widget.textStyle,
+        themeData: widget.themeData,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -145,6 +171,9 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
             // Cache layout params for the scroll listener
             _lastViewportHeight = constraints.maxHeight;
             _lastRowHeight = rowHeight;
+
+            // Keep the ViewModel informed about the current viewport width.
+            _syncViewportWidth(constraints.maxWidth);
 
             // ② Measure visible lines and update notifier
             _measureMaxLineWidth();
@@ -221,8 +250,38 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
   }
 
   bool _canToggle(ViewLine vl) {
+    if (vl.isWrappedContinuation) return false;
     final lt = vl.modelLine.lineType;
     return lt == JsonLineType.objectStart || lt == JsonLineType.arrayStart;
+  }
+
+  double _estimateMaxWidth(List<ViewLine> viewLines, double viewportWidth) {
+    final themeData = widget.themeData;
+    final isSoftWrap = widget.viewModel.softWrap;
+    double maxWidth = 0;
+    final sampleStep = viewLines.length > 1000 ? viewLines.length ~/ 500 : 1;
+
+    for (int i = 0; i < viewLines.length; i += sampleStep) {
+      final vl = viewLines[i];
+      final line = vl.modelLine;
+      final indentWidth =
+          themeData.prefixWidth + line.indentLevel * themeData.indentWidth;
+      final charWidth = themeData.fontSize * 0.6;
+
+      if (isSoftWrap) {
+        // When soft-wrap is on, only hint overflow can exceed the viewport.
+        final displayText = vl.displayTokens.map((t) => t.text).join();
+        final textWidth = displayText.length * charWidth;
+        final lineWidth = indentWidth + textWidth + 20;
+        maxWidth = math.max(maxWidth, lineWidth);
+      } else {
+        final textWidth = line.content.length * charWidth;
+        final lineWidth = indentWidth + textWidth + 20;
+        maxWidth = math.max(maxWidth, lineWidth);
+      }
+    }
+
+    return math.max(maxWidth, viewportWidth);
   }
 }
 
@@ -242,8 +301,9 @@ class _JsonViewLineWidget extends StatelessWidget {
     final line = viewLine.modelLine;
     final textStyleTheme = themeData.textStyle;
     final isContainerStart =
-        line.lineType == JsonLineType.objectStart ||
-        line.lineType == JsonLineType.arrayStart;
+        (line.lineType == JsonLineType.objectStart ||
+        line.lineType == JsonLineType.arrayStart) &&
+        !viewLine.isWrappedContinuation;
     final isCollapsed = viewLine.isCollapsedStart;
 
     // Base row: prefix + indent guides + text content.
@@ -251,13 +311,11 @@ class _JsonViewLineWidget extends StatelessWidget {
       children: [
         SizedBox(width: themeData.prefixWidth),
         ..._buildIndent(line.indentLevel),
-        if (isCollapsed)
-          line.parsedFromRawText != null
-              ? _buildCollapsedParsedContent(line, textStyleTheme)
-              : _buildCollapsedContent(line, textStyleTheme)
+        if (isCollapsed && line.parsedFromRawText == null)
+          _buildCollapsedContent(line, textStyleTheme)
         else
           Text.rich(
-            TextSpan(children: _buildTokenSpans(line, textStyleTheme)),
+            TextSpan(children: _buildDisplayTokenSpans(textStyleTheme)),
           ),
       ],
     );
@@ -283,7 +341,6 @@ class _JsonViewLineWidget extends StatelessWidget {
             left: arrowLeft.clamp(0, double.infinity),
             top: 0,
             bottom: 0,
-            // width: themeData.indentWidth,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,
               child: GestureDetector(
@@ -379,29 +436,6 @@ class _JsonViewLineWidget extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: children);
   }
 
-  /// Builds collapsed content for a parsed nested JSON string container.
-  /// Renders the original raw string text as a plain string value.
-  Widget _buildCollapsedParsedContent(
-    JsonLine line,
-    JsonViewerTextStyle textStyleTheme,
-  ) {
-    final rawText = line.parsedFromRawText!;
-
-    final spans = <InlineSpan>[];
-    for (final token in line.tokens) {
-      if (token.type == JsonTokenType.bracket) break;
-      spans.add(
-        TextSpan(
-          text: token.text,
-          style: _getTokenStyle(token, textStyleTheme, line.indentLevel),
-        ),
-      );
-    }
-    spans.add(TextSpan(text: rawText, style: textStyleTheme.string));
-
-    return Text.rich(TextSpan(children: spans));
-  }
-
   List<Widget> _buildIndent(int indentLevel) {
     if (indentLevel == 0) return const [];
     final border = BorderSide(width: 1, color: themeData.color.indentLine);
@@ -416,14 +450,14 @@ class _JsonViewLineWidget extends StatelessWidget {
     });
   }
 
-  List<InlineSpan> _buildTokenSpans(
-    JsonLine line,
+  /// Build TextSpans from [viewLine.displayTokens] (respects soft-wrap slicing).
+  List<InlineSpan> _buildDisplayTokenSpans(
     JsonViewerTextStyle textStyleTheme,
   ) {
-    return line.tokens.map((token) {
+    return viewLine.displayTokens.map((token) {
       return TextSpan(
         text: token.text,
-        style: _getTokenStyle(token, textStyleTheme, line.indentLevel),
+        style: _getTokenStyle(token, textStyleTheme, viewLine.modelLine.indentLevel),
       );
     }).toList();
   }

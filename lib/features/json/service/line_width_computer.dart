@@ -54,7 +54,24 @@ class LineWidthComputer {
   ///
   /// The cache key encodes both the model line number and the collapsed state,
   /// because a collapsed line renders different content than an expanded one.
+  ///
+  /// For soft-wrapped continuation lines, width is computed from
+  /// [ViewLine.displayTokens] (a subset of the model tokens) and is keyed by
+  /// [ViewLine.viewLineNumber] to avoid collisions with other sub-lines of the
+  /// same model line.
   double getLineWidth(ViewLine viewLine) {
+    if (viewLine.isWrappedContinuation ||
+        !identical(viewLine.displayTokens, viewLine.modelLine.tokens)) {
+      // Soft-wrapped sub-line: compute from displayTokens, keyed by viewLineNumber.
+      final key = viewLine.viewLineNumber;
+      final cached = _cache[key];
+      if (cached != null) return cached;
+
+      final width = _computeDisplayTokensWidth(viewLine);
+      _cache[key] = width;
+      return width;
+    }
+
     final key = viewLine.isCollapsedStart
         ? -viewLine.modelLineNumber - 1 // negative key for collapsed state
         : viewLine.modelLineNumber;
@@ -88,6 +105,24 @@ class LineWidthComputer {
   }
 
   // ── Internal calculation methods ──
+
+  /// Computes width for a soft-wrapped sub-line using its [displayTokens].
+  double _computeDisplayTokensWidth(ViewLine viewLine) {
+    final line = viewLine.modelLine;
+    final indentPixels = _prefixWidth + line.indentLevel * _indentWidth;
+    final tokens = viewLine.displayTokens;
+
+    // Check if all display tokens are basic ASCII for fast path.
+    final allAscii = tokens.every(
+      (t) => t.text.codeUnits.every((c) => c >= 0x20 && c < 0x7F),
+    );
+
+    if (allAscii) {
+      return indentPixels + _computeTokensWidthFast(tokens);
+    } else {
+      return indentPixels + _measureTokensWidth(tokens);
+    }
+  }
 
   double _computeLineWidth(ViewLine viewLine) {
     final line = viewLine.modelLine;
