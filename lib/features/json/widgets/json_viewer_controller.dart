@@ -300,7 +300,7 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   void onMatchChanged(int index, bool fromNavigation) {
     // V2 path: update active match in ViewModel and trigger scroll.
     final viewLine = _viewModel.setActiveMatchIndex(index);
-    if (fromNavigation && viewLine >= 0) {
+    if (viewLine >= 0) {
       if (_viewModel.didExpandForLastMatch) {
         // Layout needs a frame to reflect the expanded lines.
         SchedulerBinding.instance.addPostFrameCallback((_) {
