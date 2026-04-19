@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../../shared/widgets/search/search_controller.dart';
@@ -35,6 +36,7 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   final JsonViewerOptions options;
 
   final JsonViewModel _viewModel = JsonViewModel();
+
   JsonViewModel get viewModel => _viewModel;
 
   ValueListenable<JsonViewerData> get viewDataNotifier => _viewDataNotifier;
@@ -209,6 +211,16 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
     String search, {
     bool searchPreviousMatches = false,
   }) {
+    // ---- V2 path: search on JsonModel lines ----
+    final model = _viewModel.model;
+    if (model != null) {
+      final modelMatches = model.search(search);
+      _viewModel.updateSearchMatches(modelMatches);
+    } else {
+      _viewModel.clearSearchMatches();
+    }
+
+    // ---- V1 path (kept for backward compatibility) ----
     final treeNode = _viewDataNotifier.value.treeNode;
 
     if (treeNode == null) {
@@ -285,7 +297,27 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   }
 
   @override
-  void onMatchChanged(int index, bool fromNavigation) {}
+  void onMatchChanged(int index, bool fromNavigation) {
+    // V2 path: update active match in ViewModel and trigger scroll.
+    final viewLine = _viewModel.setActiveMatchIndex(index);
+    if (fromNavigation && viewLine >= 0) {
+      if (_viewModel.didExpandForLastMatch) {
+        // Layout needs a frame to reflect the expanded lines.
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _scrollToViewLine(viewLine);
+        });
+      } else {
+        _scrollToViewLine(viewLine);
+      }
+    }
+  }
+
+  void _scrollToViewLine(int viewLine) {
+    // Force notify even when the value is the same as the current one
+    // (e.g. two matches on the same view line).
+    _viewModel.scrollToViewLineNotifier.value = -1;
+    _viewModel.scrollToViewLineNotifier.value = viewLine;
+  }
 }
 
 class JsonViewerData {

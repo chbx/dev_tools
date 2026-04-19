@@ -8,6 +8,19 @@ import '../widgets/json_viewer_theme.dart';
 import 'line_break_computer.dart';
 import 'view_line.dart';
 
+/// A highlight range within a single view line.
+class MatchHighlight {
+  final int startColumn; // character offset within the view-line text
+  final int endColumn;
+  final bool isActive;
+
+  const MatchHighlight({
+    required this.startColumn,
+    required this.endColumn,
+    required this.isActive,
+  });
+}
+
 /// Maps Model lines to View lines, filtering out collapsed ranges.
 ///
 /// Supports soft-wrap: when enabled a single model line may produce multiple
@@ -17,6 +30,21 @@ class JsonViewModel extends ChangeNotifier {
   JsonModel? _model;
 
   JsonModel? get model => _model;
+
+  // ---- search state ----
+
+  List<ModelSearchMatch> _searchMatches = const [];
+  int _activeMatchIndex = -1;
+
+  /// Model line number → index in _visibleModelLines (built during rebuildViewLines).
+  Map<int, int> _modelLineToVisibleIndex = const {};
+
+  /// Per-visible-model-line: its model line number (built during rebuildViewLines).
+  // ignore: unused_field
+  List<int> _visibleModelLineNumbers = const [];
+
+  /// Notifier that fires when the view should scroll to a specific view line.
+  final ValueNotifier<int> scrollToViewLineNotifier = ValueNotifier<int>(-1);
 
   List<ViewLine> _viewLines = const [];
 
@@ -151,6 +179,8 @@ class JsonViewModel extends ChangeNotifier {
 
     final result = <ViewLine>[];
     final perModelCounts = <int>[];
+    final modelLineToVisible = <int, int>{};
+    final visibleModelLines = <int>[];
     int viewLineNum = 0;
     int i = 0;
     while (i < lines.length) {
@@ -194,6 +224,8 @@ class JsonViewModel extends ChangeNotifier {
             );
             perModelCounts.add(1);
           }
+          modelLineToVisible[line.lineNumber] = visibleModelLines.length;
+          visibleModelLines.add(line.lineNumber);
         } else {
           // Normal collapsed container: single view line.
           result.add(
@@ -205,6 +237,8 @@ class JsonViewModel extends ChangeNotifier {
             ),
           );
           perModelCounts.add(1);
+          modelLineToVisible[line.lineNumber] = visibleModelLines.length;
+          visibleModelLines.add(line.lineNumber);
         }
         if (endLineNumber != null) {
           i = endLineNumber + 1;
@@ -226,6 +260,8 @@ class JsonViewModel extends ChangeNotifier {
           );
         }
         perModelCounts.add(wrapResults.length);
+        modelLineToVisible[line.lineNumber] = visibleModelLines.length;
+        visibleModelLines.add(line.lineNumber);
         i++;
       } else {
         // No wrapping.
@@ -237,11 +273,15 @@ class JsonViewModel extends ChangeNotifier {
           ),
         );
         perModelCounts.add(1);
+        modelLineToVisible[line.lineNumber] = visibleModelLines.length;
+        visibleModelLines.add(line.lineNumber);
         i++;
       }
     }
 
     _viewLines = result;
+    _modelLineToVisibleIndex = modelLineToVisible;
+    _visibleModelLineNumbers = visibleModelLines;
     _viewLineCountPerModelLine = perModelCounts;
     _buildPrefixSums(perModelCounts);
 
@@ -345,5 +385,139 @@ class JsonViewModel extends ChangeNotifier {
       sums[i + 1] = sums[i] + counts[i];
     }
     _prefixSums = sums;
+  }
+
+  // ---- search API ----
+
+  /// Replace the current search matches and notify listeners.
+  void updateSearchMatches(List<ModelSearchMatch> matches) {
+    _searchMatches = matches;
+    _activeMatchIndex = matches.isEmpty ? -1 : 0;
+    notifyListeners();
+  }
+
+  /// Clear search matches.
+  void clearSearchMatches() {
+    _searchMatches = const [];
+    _activeMatchIndex = -1;
+    notifyListeners();
+  }
+
+  /// Whether [setActiveMatchIndex] expanded collapsed containers on its last
+  /// call.  When `true` the caller should defer the scroll to a post-frame
+  /// callback so that the layout reflects the newly expanded lines.
+  bool didExpandForLastMatch = false;
+
+  /// Set the active match by index. Returns the view line number to scroll to,
+  /// or -1 if the match is not visible.
+  ///
+  /// If the match is inside a collapsed region, the enclosing containers are
+  /// automatically expanded and view lines are rebuilt before computing the
+  /// scroll target.  In that case [didExpandForLastMatch] is set to `true`.
+  int setActiveMatchIndex(int index) {
+    _activeMatchIndex = index;
+    didExpandForLastMatch = false;
+    if (index < 0 || index >= _searchMatches.length) {
+      notifyListeners();
+      return -1;
+    }
+    final match = _searchMatches[index];
+
+    // If the target line is inside a collapsed region, expand it first.
+    final model = _model;
+    if (model != null &&
+        _modelLineToVisibleIndex[match.lineNumber] == null) {
+      if (model.expandContainersOf(match.lineNumber)) {
+        didExpandForLastMatch = true;
+        rebuildViewLines(); // rebuilds _modelLineToVisibleIndex
+        // notifyListeners() was already called by rebuildViewLines
+        return _getViewLineForMatch(match);
+      }
+    }
+
+    notifyListeners();
+    return _getViewLineForMatch(match);
+  }
+
+  int get activeMatchIndex => _activeMatchIndex;
+
+  List<ModelSearchMatch> get searchMatches => _searchMatches;
+
+  /// Returns the view line number that contains [match], accounting for
+  /// soft-wrap. Returns -1 if the model line is not visible (collapsed).
+  int _getViewLineForMatch(ModelSearchMatch match) {
+    final visibleIndex = _modelLineToVisibleIndex[match.lineNumber];
+    if (visibleIndex == null) return -1;
+    final firstViewLine = modelToViewLineNumber(visibleIndex);
+    // Walk through the view lines of this model line to find the one
+    // that contains match.startColumn.
+    int charOffset = 0;
+    for (int vl = firstViewLine; vl < _viewLines.length; vl++) {
+      final viewLine = _viewLines[vl];
+      if (viewLine.modelLineNumber != match.lineNumber) break;
+      final lineCharLen = viewLine.displayTokens.fold<int>(
+        0,
+        (sum, t) => sum + t.text.length,
+      );
+      if (match.startColumn < charOffset + lineCharLen) {
+        return vl;
+      }
+      charOffset += lineCharLen;
+    }
+    // Fallback: return the first view line.
+    return firstViewLine;
+  }
+
+  /// Returns highlight ranges for a given view line.
+  List<MatchHighlight> getMatchHighlightsForViewLine(int viewLineIndex) {
+    if (_searchMatches.isEmpty ||
+        viewLineIndex < 0 ||
+        viewLineIndex >= _viewLines.length) {
+      return const [];
+    }
+    final vl = _viewLines[viewLineIndex];
+    final modelLineNumber = vl.modelLineNumber;
+
+    // Compute the character offset of this view line within the model line.
+    // For wrapped continuation lines, we need to sum the lengths of previous
+    // view-line slices belonging to the same model line.
+    int viewLineCharStart = 0;
+    if (vl.isWrappedContinuation) {
+      // Walk backwards to find the first view line of this model line.
+      for (int i = viewLineIndex - 1; i >= 0; i--) {
+        final prev = _viewLines[i];
+        if (prev.modelLineNumber != modelLineNumber) break;
+        viewLineCharStart += prev.displayTokens.fold<int>(
+          0,
+          (sum, t) => sum + t.text.length,
+        );
+      }
+    }
+    final viewLineCharLen = vl.displayTokens.fold<int>(
+      0,
+      (sum, t) => sum + t.text.length,
+    );
+    final viewLineCharEnd = viewLineCharStart + viewLineCharLen;
+
+    final highlights = <MatchHighlight>[];
+    for (int mi = 0; mi < _searchMatches.length; mi++) {
+      final m = _searchMatches[mi];
+      if (m.lineNumber != modelLineNumber) continue;
+      // Clip match range to this view line's character range.
+      final clippedStart = m.startColumn.clamp(
+        viewLineCharStart,
+        viewLineCharEnd,
+      );
+      final clippedEnd = m.endColumn.clamp(viewLineCharStart, viewLineCharEnd);
+      if (clippedStart >= clippedEnd) continue;
+      highlights.add(
+        MatchHighlight(
+          startColumn: clippedStart - viewLineCharStart,
+          endColumn: clippedEnd - viewLineCharStart,
+          isActive: mi == _activeMatchIndex,
+        ),
+      );
+    }
+    return highlights;
   }
 }

@@ -56,6 +56,7 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
     super.initState();
     _verticalController.addListener(_onVerticalScroll);
     widget.viewModel.addListener(_onViewModelChanged);
+    widget.viewModel.scrollToViewLineNotifier.addListener(_onScrollToViewLine);
   }
 
   @override
@@ -64,6 +65,12 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
     if (oldWidget.viewModel != widget.viewModel) {
       oldWidget.viewModel.removeListener(_onViewModelChanged);
       widget.viewModel.addListener(_onViewModelChanged);
+      oldWidget.viewModel.scrollToViewLineNotifier.removeListener(
+        _onScrollToViewLine,
+      );
+      widget.viewModel.scrollToViewLineNotifier.addListener(
+        _onScrollToViewLine,
+      );
       _invalidateMaxWidth();
       // Reset so _syncViewportWidth re-fires for the new ViewModel.
       _lastSyncedWidth = -1;
@@ -74,6 +81,9 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
   void dispose() {
     _verticalController.removeListener(_onVerticalScroll);
     widget.viewModel.removeListener(_onViewModelChanged);
+    widget.viewModel.scrollToViewLineNotifier.removeListener(
+      _onScrollToViewLine,
+    );
     _maxLineWidthNotifier.dispose();
     _verticalController.dispose();
     _horizontalController.dispose();
@@ -121,6 +131,89 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
 
     // ValueNotifier only notifies when value actually changes
     _maxLineWidthNotifier.value = currentMax;
+  }
+
+  void _onScrollToViewLine() {
+    final viewLine = widget.viewModel.scrollToViewLineNotifier.value;
+    if (viewLine < 0) return;
+    if (!_verticalController.hasClients) return;
+
+    // Defer scroll to next frame so layout (maxScrollExtent, viewport
+    // dimensions) is fully up to date after the notifier fires.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_verticalController.hasClients) return;
+
+      final rowHeight = widget.themeData.defaultRowHeight;
+      final targetOffset = viewLine * rowHeight;
+      final viewportHeight = _verticalController.position.viewportDimension;
+      final centeredOffset =
+          (targetOffset - viewportHeight / 2 + rowHeight / 2).clamp(
+        0.0,
+        _verticalController.position.maxScrollExtent,
+      );
+
+      _verticalController.animateTo(
+        centeredOffset,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+      );
+
+      // ---- horizontal scroll ----
+      if (!_horizontalController.hasClients) return;
+      if (widget.viewModel.softWrap) return; // soft-wrap fits viewport
+      final activeIdx = widget.viewModel.activeMatchIndex;
+      final matches = widget.viewModel.searchMatches;
+      if (activeIdx < 0 || activeIdx >= matches.length) return;
+      final match = matches[activeIdx];
+      final viewLines = widget.viewModel.viewLines;
+      if (viewLine >= viewLines.length) return;
+      final vl = viewLines[viewLine];
+
+      // Compute character offset of this view line within its model line.
+      int viewLineCharStart = 0;
+      if (vl.isWrappedContinuation) {
+        for (int i = viewLine - 1; i >= 0; i--) {
+          final prev = viewLines[i];
+          if (prev.modelLineNumber != vl.modelLineNumber) break;
+          viewLineCharStart += prev.displayTokens.fold<int>(
+            0,
+            (sum, t) => sum + t.text.length,
+          );
+        }
+      }
+      final localCol = match.startColumn - viewLineCharStart;
+      if (localCol < 0) return; // match not on this view line
+
+      // Measure actual character width from the text style.
+      final tp = TextPainter(
+        text: TextSpan(text: 'm', style: widget.textStyle),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      final charWidth = tp.width;
+
+      final indentWidth = widget.themeData.prefixWidth +
+          vl.modelLine.indentLevel * widget.themeData.indentWidth;
+      final matchX = indentWidth + localCol * charWidth;
+
+      final viewportWidth = _horizontalController.position.viewportDimension;
+      const padding = 80.0;
+      final targetLeft = matchX - padding;
+      final targetRight =
+          matchX + (match.endColumn - match.startColumn) * charWidth + padding;
+      final currentLeft = _horizontalController.offset;
+      final currentRight = currentLeft + viewportWidth;
+
+      if (targetLeft < currentLeft || targetRight > currentRight) {
+        final hOffset = (matchX - viewportWidth / 3)
+            .clamp(0.0, _horizontalController.position.maxScrollExtent);
+        _horizontalController.animateTo(
+          hOffset,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
   }
 
   /// Deferred viewport-width sync: schedules a post-frame callback so that
@@ -221,9 +314,12 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
                               itemExtent: rowHeight,
                               itemCount: viewLines.length,
                               itemBuilder: (context, index) {
+                                final matchHighlights = widget.viewModel
+                                    .getMatchHighlightsForViewLine(index);
                                 return _JsonViewLineWidget(
                                   viewLine: viewLines[index],
                                   themeData: widget.themeData,
+                                  matchHighlights: matchHighlights,
                                   onToggleCollapse:
                                       _canToggle(viewLines[index])
                                           ? () =>
@@ -261,12 +357,20 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
     double maxWidth = 0;
     final sampleStep = viewLines.length > 1000 ? viewLines.length ~/ 500 : 1;
 
+    // Measure actual character width using TextPainter for consistency
+    // with the horizontal scroll calculation.
+    final tp = TextPainter(
+      text: TextSpan(text: 'm', style: widget.textStyle),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    final charWidth = tp.width;
+
     for (int i = 0; i < viewLines.length; i += sampleStep) {
       final vl = viewLines[i];
       final line = vl.modelLine;
       final indentWidth =
           themeData.prefixWidth + line.indentLevel * themeData.indentWidth;
-      final charWidth = themeData.fontSize * 0.6;
 
       if (isSoftWrap) {
         // When soft-wrap is on, only hint overflow can exceed the viewport.
@@ -290,11 +394,13 @@ class _JsonViewLineWidget extends StatelessWidget {
     required this.viewLine,
     required this.themeData,
     required this.onToggleCollapse,
+    this.matchHighlights = const [],
   });
 
   final ViewLine viewLine;
   final JsonViewerThemeData themeData;
   final VoidCallback? onToggleCollapse;
+  final List<MatchHighlight> matchHighlights;
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +408,7 @@ class _JsonViewLineWidget extends StatelessWidget {
     final textStyleTheme = themeData.textStyle;
     final isContainerStart =
         (line.lineType == JsonLineType.objectStart ||
-        line.lineType == JsonLineType.arrayStart) &&
+            line.lineType == JsonLineType.arrayStart) &&
         !viewLine.isWrappedContinuation;
     final isCollapsed = viewLine.isCollapsedStart;
 
@@ -330,7 +436,8 @@ class _JsonViewLineWidget extends StatelessWidget {
     final arrowLeft =
         themeData.prefixWidth +
         line.indentLevel * themeData.indentWidth -
-         themeData.fontSize - 2;
+        themeData.fontSize -
+        2;
 
     return SizedBox(
       height: themeData.defaultRowHeight,
@@ -348,9 +455,7 @@ class _JsonViewLineWidget extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 child: Center(
                   child: Icon(
-                    isCollapsed
-                        ? Icons.chevron_right
-                        : Icons.expand_more,
+                    isCollapsed ? Icons.chevron_right : Icons.expand_more,
                     size: 16,
                     color: themeData.color.foldExpandButton,
                   ),
@@ -409,9 +514,11 @@ class _JsonViewLineWidget extends StatelessWidget {
 
     final List<Widget> children = [];
 
-    // Key/colon part (no background).
+    // Key/colon part (no background), with search highlights applied.
     if (prefixSpans.isNotEmpty) {
-      children.add(Text.rich(TextSpan(children: prefixSpans)));
+      final highlighted =
+          matchHighlights.isEmpty ? prefixSpans : _applyHighlights(prefixSpans);
+      children.add(Text.rich(TextSpan(children: highlighted)));
     }
 
     // Bracket + summary part (fold background, tappable with pointer cursor).
@@ -451,15 +558,78 @@ class _JsonViewLineWidget extends StatelessWidget {
   }
 
   /// Build TextSpans from [viewLine.displayTokens] (respects soft-wrap slicing).
-  List<InlineSpan> _buildDisplayTokenSpans(
-    JsonViewerTextStyle textStyleTheme,
+  List<InlineSpan> _buildDisplayTokenSpans(JsonViewerTextStyle textStyleTheme) {
+    final spans =
+        viewLine.displayTokens.map((token) {
+          return TextSpan(
+            text: token.text,
+            style: _getTokenStyle(
+              token,
+              textStyleTheme,
+              viewLine.modelLine.indentLevel,
+            ),
+          );
+        }).toList();
+
+    if (matchHighlights.isEmpty) return spans;
+    return _applyHighlights(spans);
+  }
+
+  /// Overlay search-match highlights onto [spans].
+  List<InlineSpan> _applyHighlights(List<InlineSpan> spans) {
+    var result = spans;
+    for (final hl in matchHighlights) {
+      result = _splitSpansForHighlight(result, hl);
+    }
+    return result;
+  }
+
+  /// Split [spans] at the highlight boundary and apply background color.
+  List<InlineSpan> _splitSpansForHighlight(
+    List<InlineSpan> spans,
+    MatchHighlight highlight,
   ) {
-    return viewLine.displayTokens.map((token) {
-      return TextSpan(
-        text: token.text,
-        style: _getTokenStyle(token, textStyleTheme, viewLine.modelLine.indentLevel),
-      );
-    }).toList();
+    final matchColor =
+        highlight.isActive
+            ? themeData.color.activeFindMatchBackground
+            : themeData.color.findMatchBackground;
+
+    final result = <InlineSpan>[];
+    int charPos = 0;
+    final matchStart = highlight.startColumn;
+    final matchEnd = highlight.endColumn;
+
+    for (final span in spans) {
+      final text = span.toPlainText();
+      final spanStart = charPos;
+      final spanEnd = charPos + text.length;
+
+      if (spanEnd <= matchStart || spanStart >= matchEnd) {
+        // No overlap.
+        result.add(span);
+      } else {
+        // There is overlap.
+        final hlStart = (matchStart - spanStart).clamp(0, text.length);
+        final hlEnd = (matchEnd - spanStart).clamp(0, text.length);
+
+        if (hlStart > 0) {
+          result.add(
+            TextSpan(text: text.substring(0, hlStart), style: span.style),
+          );
+        }
+        final hlStyle = (span.style ?? const TextStyle()).copyWith(
+          backgroundColor: matchColor,
+        );
+        result.add(
+          TextSpan(text: text.substring(hlStart, hlEnd), style: hlStyle),
+        );
+        if (hlEnd < text.length) {
+          result.add(TextSpan(text: text.substring(hlEnd), style: span.style));
+        }
+      }
+      charPos = spanEnd;
+    }
+    return result;
   }
 
   TextStyle? _getTokenStyle(

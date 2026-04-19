@@ -3,8 +3,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../shared/theme/theme.dart';
 import '../../shared/widgets/shortcuts/key_sets.dart';
 import '../../shared/widgets/shortcuts/shortcuts.dart';
+import '../../shared/widgets/search/search_field.dart';
+import '../../shared/widgets/search/search_theme.dart';
 import 'widgets/json_viewer.dart';
 import 'widgets/json_viewer_controller.dart';
 import 'widgets/json_viewer_theme.dart';
@@ -101,12 +104,57 @@ class JsonViewerPage extends StatelessWidget {
     final textStyle = DefaultTextStyle.of(context).style.merge(
       TextStyle(fontFamily: themeData.fontFamily, fontSize: themeData.fontSize),
     );
-    return JsonViewerV2(
-      viewModel: jsonViewerController.viewModel,
-      themeData: themeData,
-      textStyle: textStyle,
-      scrollIdH: scrollIdH,
-      scrollIdV: scrollIdV,
+    return Stack(
+      children: [
+        JsonViewerV2(
+          viewModel: jsonViewerController.viewModel,
+          themeData: themeData,
+          textStyle: textStyle,
+          scrollIdH: scrollIdH,
+          scrollIdV: scrollIdV,
+        ),
+        PositionedPopup(
+          isVisibleListenable: jsonViewerController.showSearchField,
+          top: menuBarHeight + denseSpacing,
+          right: 20,
+          child: _buildSearchField(themeData),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchField(JsonViewerThemeData themeData) {
+    return Material(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        width: wideSearchFieldWidth,
+        height: themeData.defaultTextFieldHeight + 2 * denseSpacing,
+        padding: const EdgeInsets.symmetric(
+          horizontal: denseSpacing,
+          vertical: densePadding,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6.0),
+          border: Border.all(color: const Color(0xFFd6d6d6), width: 0.5),
+        ),
+        child: SearchTheme(
+          theme: SearchThemeData(fontSize: themeData.fontSize),
+          child: SearchField<JsonViewerController>(
+            searchController: jsonViewerController,
+            searchFieldEnabled: true,
+            supportsNavigation: true,
+            searchFieldWidth: wideSearchFieldWidth,
+            searchFieldBorder: const OutlineInputBorder(
+              borderSide: BorderSide.none,
+              gapPadding: 0.0,
+            ),
+            onClose: () => jsonViewerController.closeSearchField(),
+          ),
+        ),
+      ),
     );
   }
 }
