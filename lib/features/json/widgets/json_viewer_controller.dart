@@ -6,12 +6,14 @@ import 'package:flutter/widgets.dart';
 import '../../../shared/widgets/search/search_controller.dart';
 import '../core/json_parser.dart';
 import '../core/json_parser_options.dart';
+import '../model/json_model.dart';
 import '../model/tree_path.dart';
 import '../model/viewer_options.dart';
 import '../service/display_opt.dart';
 import '../model/json_value.dart' as model;
 import '../utils/convert.dart';
 import '../utils/to_string.dart';
+import '../view_model/json_view_model.dart';
 import '../view_model/tree_node_data.dart';
 
 class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
@@ -26,10 +28,14 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
   void dispose() {
     _viewDataNotifier.dispose();
     _showSearchField.dispose();
+    _viewModel.dispose();
     disposeSearch();
   }
 
   final JsonViewerOptions options;
+
+  final JsonViewModel _viewModel = JsonViewModel();
+  JsonViewModel get viewModel => _viewModel;
 
   ValueListenable<JsonViewerData> get viewDataNotifier => _viewDataNotifier;
   final _viewDataNotifier = ValueNotifier(JsonViewerData(text: ''));
@@ -76,6 +82,12 @@ class JsonViewerController with SearchControllerMixin<JsonViewFindMatch> {
     TreeSliverNode<TreeNodeData>? treeNode;
     if (modelValue != null) {
       treeNode = buildTreeNodes(modelValue);
+    }
+
+    if (modelValue != null) {
+      _viewModel.updateModel(JsonModel.fromJsonValue(modelValue));
+    } else {
+      _viewModel.updateModel(null);
     }
 
     final viewData = JsonViewerData(

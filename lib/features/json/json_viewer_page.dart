@@ -8,6 +8,10 @@ import '../../shared/widgets/shortcuts/shortcuts.dart';
 import 'widgets/json_viewer.dart';
 import 'widgets/json_viewer_controller.dart';
 import 'widgets/json_viewer_theme.dart';
+import 'widgets/json_viewer_v2.dart';
+
+// Feature flag for switching between old and new rendering implementations.
+const _useV2 = true;
 
 class JsonViewerPage extends StatelessWidget {
   const JsonViewerPage({
@@ -34,19 +38,21 @@ class JsonViewerPage extends StatelessWidget {
             data: media.copyWith(
               padding: media.padding.copyWith(top: menuBarHeight),
             ),
-            child: JsonViewer(
-              themeData: JsonViewerThemeData(
-                color: defaultColorThemeData,
-                prefixWidth: 28.0,
-                indentWidth: 24.0,
-                fontFamily: 'Menlo',
-                fontSize: 14.0,
-                spaceAfterIcon: 4,
-              ),
-              controller: jsonViewerController,
-              scrollIdH: scrollIdH,
-              scrollIdV: scrollIdV,
-            ),
+            child: _useV2
+                ? _buildV2Viewer(context, menuBarHeight)
+                : JsonViewer(
+                    themeData: JsonViewerThemeData(
+                      color: defaultColorThemeData,
+                      prefixWidth: 28.0,
+                      indentWidth: 24.0,
+                      fontFamily: 'Menlo',
+                      fontSize: 14.0,
+                      spaceAfterIcon: 4,
+                    ),
+                    controller: jsonViewerController,
+                    scrollIdH: scrollIdH,
+                    scrollIdV: scrollIdV,
+                  ),
           ),
           Positioned(
             left: 0.0,
@@ -80,6 +86,27 @@ class JsonViewerPage extends StatelessWidget {
       SearchInFileIntent: SearchInFileAction(),
     };
     return ShortcutsConfiguration(shortcuts: shortcuts, actions: actions);
+  }
+
+  Widget _buildV2Viewer(BuildContext context, double menuBarHeight) {
+    final themeData = JsonViewerThemeData(
+      color: defaultColorThemeData,
+      prefixWidth: 28.0,
+      indentWidth: 24.0,
+      fontFamily: 'Menlo',
+      fontSize: 14.0,
+      spaceAfterIcon: 4,
+    );
+    final textStyle = DefaultTextStyle.of(context).style.merge(
+      TextStyle(fontFamily: themeData.fontFamily, fontSize: themeData.fontSize),
+    );
+    return JsonViewerV2(
+      viewModel: jsonViewerController.viewModel,
+      themeData: themeData,
+      textStyle: textStyle,
+      scrollIdH: scrollIdH,
+      scrollIdV: scrollIdV,
+    );
   }
 }
 
