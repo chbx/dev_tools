@@ -4,9 +4,18 @@ import '../model/json_line.dart';
 import '../model/json_value.dart';
 import 'to_string.dart';
 
-List<JsonLine> buildJsonLines(JsonValue rootValue) {
+List<JsonLine> buildJsonLines(
+  JsonValue rootValue, {
+  int baseIndent = 0,
+  int baseBracketDepth = 0,
+}) {
   final builder = _JsonLineBuilder();
-  builder._buildLines(rootValue, indent: 0, comma: false, bracketDepth: 0);
+  builder._buildLines(
+    rootValue,
+    indent: baseIndent,
+    comma: false,
+    bracketDepth: baseBracketDepth,
+  );
   return builder._lines;
 }
 
@@ -74,6 +83,7 @@ class _JsonLineBuilder {
           keyString: keyString,
           bracketDepth: bracketDepth,
           keyExtractor: (JsonObjectKeyString key) => key.value.rawText,
+          refValue: value.ref,
         );
       case ExtendedJsonObject():
         _buildObjectLines(
@@ -204,6 +214,7 @@ class _JsonLineBuilder {
     required int bracketDepth,
     required String Function(T key) keyExtractor,
     String? parsedFromRawText,
+    JsonValue? refValue,
   }) {
     final depth = bracketDepth;
     if (entryMap.isEmpty) {
@@ -224,6 +235,7 @@ class _JsonLineBuilder {
       lineType: JsonLineType.objectStart,
       childCount: entryMap.length,
       parsedFromRawText: parsedFromRawText,
+      refValue: refValue,
       tokens: [
         ..._keyTokens(keyString),
         JsonLineToken('{', JsonTokenType.bracket, bracketDepth: depth),
@@ -286,6 +298,7 @@ class _JsonLineBuilder {
     required List<JsonLineToken> tokens,
     int? childCount,
     String? parsedFromRawText,
+    JsonValue? refValue,
   }) {
     final content = tokens.map((t) => t.text).join();
     _lines.add(JsonLine(
@@ -297,6 +310,7 @@ class _JsonLineBuilder {
       isBasicASCII: _checkBasicASCII(content),
       childCount: childCount,
       parsedFromRawText: parsedFromRawText,
+      refValue: refValue,
     ));
   }
 

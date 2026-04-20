@@ -117,6 +117,25 @@ class JsonViewModel extends ChangeNotifier {
     }
   }
 
+  /// Toggle the `$ref` expand state on a container-start line and rebuild.
+  void toggleRefExpand(int modelLineNumber) {
+    final model = _model;
+    if (model == null) return;
+    if (model.toggleRefExpand(modelLineNumber)) {
+      rebuildViewLines();
+    }
+  }
+
+  /// Toggle collapse on a container-start line inside a ref-expanded cache.
+  /// Uses the cache's independent collapse state.
+  void toggleRefCollapse(int refSourceLineNumber, int lineNumber) {
+    final model = _model;
+    if (model == null) return;
+    if (model.toggleRefCollapse(refSourceLineNumber, lineNumber)) {
+      rebuildViewLines();
+    }
+  }
+
   /// Collapse all containers and rebuild.
   void collapseAll() {
     final model = _model;
@@ -174,6 +193,8 @@ class JsonViewModel extends ChangeNotifier {
     final lines = model.lines;
     final collapsed = model.collapsedLineNumbers;
     final startToEnd = model.startToEndMap;
+    final refExpanded = model.refExpandedLineNumbers;
+    final refCache = model.refExpandedLinesCache;
 
     final doWrap = _softWrap && _themeData != null && _textStyle != null;
 
@@ -245,6 +266,60 @@ class JsonViewModel extends ChangeNotifier {
         } else {
           i++;
         }
+      } else if (refExpanded.contains(line.lineNumber)) {
+        // Ref-expanded container: skip the entire original object (including
+        // `{` and `}`) and replace it with the dereferenced value's lines.
+        // The key prefix (e.g. `"keyRef": `) has already been injected into
+        // the first ref line during cache construction.
+        final endLineNumber = startToEnd[line.lineNumber];
+        final cache = refCache[line.lineNumber];
+        final originalLineNumber = line.lineNumber;
+
+        // Emit the ref value's lines with independent collapse handling.
+        if (cache != null) {
+          final refLines = cache.lines;
+          final refCollapsed = cache.collapsedLineNumbers;
+          final refStartToEnd = cache.startToEndMap;
+          int ri = 0;
+          while (ri < refLines.length) {
+            final refLine = refLines[ri];
+            if (refCollapsed.contains(refLine.lineNumber)) {
+              // Collapsed ref container: single view line.
+              result.add(
+                ViewLine(
+                  viewLineNumber: viewLineNum++,
+                  modelLineNumber: refLine.lineNumber,
+                  modelLine: refLine,
+                  isCollapsedStart: true,
+                  refSourceLineNumber: originalLineNumber,
+                ),
+              );
+              perModelCounts.add(1);
+              modelLineToVisible[refLine.lineNumber] =
+                  visibleModelLines.length;
+              visibleModelLines.add(refLine.lineNumber);
+              final refEnd = refStartToEnd[refLine.lineNumber];
+              if (refEnd != null) {
+                ri = refEnd + 1;
+              } else {
+                ri++;
+              }
+            } else {
+              _emitViewLine(result, perModelCounts, modelLineToVisible,
+                  visibleModelLines, refLine, viewLineNum, doWrap,
+                  refSourceLineNumber: originalLineNumber);
+              viewLineNum = result.length;
+              ri++;
+            }
+          }
+        }
+
+        // Skip the entire original object including the end bracket.
+        if (endLineNumber != null) {
+          i = endLineNumber + 1;
+        } else {
+          i++;
+        }
       } else if (doWrap) {
         // Soft-wrap: compute line breaks.
         final wrapResults = _computeWrappedLines(line);
@@ -297,6 +372,48 @@ class JsonViewModel extends ChangeNotifier {
   }
 
   // ---- private helpers ----
+
+  /// Emit a single [JsonLine] as one or more [ViewLine]s (handling soft-wrap)
+  /// into the given result lists.
+  void _emitViewLine(
+    List<ViewLine> result,
+    List<int> perModelCounts,
+    Map<int, int> modelLineToVisible,
+    List<int> visibleModelLines,
+    JsonLine line,
+    int viewLineNum,
+    bool doWrap, {
+    int? refSourceLineNumber,
+  }) {
+    if (doWrap) {
+      final wrapResults = _computeWrappedLines(line);
+      for (int w = 0; w < wrapResults.length; w++) {
+        result.add(
+          ViewLine(
+            viewLineNumber: viewLineNum + w,
+            modelLineNumber: line.lineNumber,
+            modelLine: line,
+            isWrappedContinuation: w > 0,
+            displayTokens: wrapResults[w],
+            refSourceLineNumber: refSourceLineNumber,
+          ),
+        );
+      }
+      perModelCounts.add(wrapResults.length);
+    } else {
+      result.add(
+        ViewLine(
+          viewLineNumber: viewLineNum,
+          modelLineNumber: line.lineNumber,
+          modelLine: line,
+          refSourceLineNumber: refSourceLineNumber,
+        ),
+      );
+      perModelCounts.add(1);
+    }
+    modelLineToVisible[line.lineNumber] = visibleModelLines.length;
+    visibleModelLines.add(line.lineNumber);
+  }
 
   /// Build virtual display tokens for a collapsed parsed container:
   /// key/colon prefix from the original line + the raw string text.

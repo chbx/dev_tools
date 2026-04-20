@@ -316,18 +316,55 @@ class _JsonViewerV2State extends State<JsonViewerV2> {
                               itemBuilder: (context, index) {
                                 final matchHighlights = widget.viewModel
                                     .getMatchHighlightsForViewLine(index);
+                                final vl = viewLines[index];
+                                // Determine if this line has a $ref button.
+                                // Two cases: (1) original objectStart with
+                                // refValue (not yet expanded), or (2) the
+                                // first line of a ref expansion (has
+                                // refSourceLineNumber).
+                                final hasRefOnModel =
+                                    vl.modelLine.refValue != null &&
+                                    !vl.isWrappedContinuation;
+                                final refSource = vl.refSourceLineNumber;
+                                final isRefFromExpansion = refSource != null &&
+                                    !vl.isWrappedContinuation &&
+                                    vl.modelLine.refValue != null;
+                                final hasRef = hasRefOnModel || isRefFromExpansion;
+                                // The line number to pass to toggleRefExpand.
+                                final refToggleLineNumber = refSource ?? vl.modelLineNumber;
+                                final isRefExpanded = hasRef &&
+                                    widget.viewModel.model
+                                        ?.refExpandedLineNumbers
+                                        .contains(refToggleLineNumber) == true;
+                                // For lines inside a ref expansion, use the
+                                // independent collapse method so folding does
+                                // not affect the main model.
+                                final VoidCallback? collapseCallback;
+                                if (!_canToggle(vl)) {
+                                  collapseCallback = null;
+                                } else if (refSource != null) {
+                                  collapseCallback = () =>
+                                      widget.viewModel.toggleRefCollapse(
+                                        refSource,
+                                        vl.modelLineNumber,
+                                      );
+                                } else {
+                                  collapseCallback = () =>
+                                      widget.viewModel.toggleCollapse(
+                                        vl.modelLineNumber,
+                                      );
+                                }
                                 return _JsonViewLineWidget(
-                                  viewLine: viewLines[index],
+                                  viewLine: vl,
                                   themeData: widget.themeData,
                                   matchHighlights: matchHighlights,
-                                  onToggleCollapse:
-                                      _canToggle(viewLines[index])
-                                          ? () =>
-                                              widget.viewModel.toggleCollapse(
-                                                viewLines[index]
-                                                    .modelLineNumber,
-                                              )
-                                          : null,
+                                  onToggleCollapse: collapseCallback,
+                                  isRefExpanded: isRefExpanded,
+                                  onToggleRefExpand: hasRef
+                                      ? () => widget.viewModel.toggleRefExpand(
+                                            refToggleLineNumber,
+                                          )
+                                      : null,
                                 );
                               },
                             ),
@@ -395,12 +432,22 @@ class _JsonViewLineWidget extends StatelessWidget {
     required this.themeData,
     required this.onToggleCollapse,
     this.matchHighlights = const [],
+    this.isRefExpanded = false,
+    this.onToggleRefExpand,
   });
 
   final ViewLine viewLine;
   final JsonViewerThemeData themeData;
   final VoidCallback? onToggleCollapse;
   final List<MatchHighlight> matchHighlights;
+
+  /// Whether this line's `$ref` is currently expanded to show the
+  /// dereferenced value.
+  final bool isRefExpanded;
+
+  /// Callback to toggle the `$ref` expand state.  Non-null only when the
+  /// line has a resolvable `$ref`.
+  final VoidCallback? onToggleRefExpand;
 
   @override
   Widget build(BuildContext context) {
@@ -426,7 +473,9 @@ class _JsonViewLineWidget extends StatelessWidget {
       ],
     );
 
-    if (!isContainerStart) {
+    final hasRefButton = onToggleRefExpand != null;
+
+    if (!isContainerStart && !hasRefButton) {
       return SizedBox(height: themeData.defaultRowHeight, child: row);
     }
 
@@ -444,26 +493,79 @@ class _JsonViewLineWidget extends StatelessWidget {
       child: Stack(
         children: [
           row,
-          Positioned(
-            left: arrowLeft.clamp(0, double.infinity),
-            top: 0,
-            bottom: 0,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: onToggleCollapse,
-                behavior: HitTestBehavior.opaque,
-                child: Center(
-                  child: Icon(
-                    isCollapsed ? Icons.chevron_right : Icons.expand_more,
-                    size: 16,
-                    color: themeData.color.foldExpandButton,
+          // $ref expand button — placed before the collapse/expand arrow.
+          if (hasRefButton)
+            Positioned(
+              left: (isContainerStart
+                      ? arrowLeft - themeData.fontSize - 2
+                      : arrowLeft)
+                  .clamp(0, double.infinity),
+              top: 0,
+              bottom: 0,
+              child: _buildRefExpandButton(),
+            ),
+          if (isContainerStart)
+            Positioned(
+              left: arrowLeft.clamp(0, double.infinity),
+              top: 0,
+              bottom: 0,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: onToggleCollapse,
+                  behavior: HitTestBehavior.opaque,
+                  child: Center(
+                    child: Icon(
+                      isCollapsed ? Icons.chevron_right : Icons.expand_more,
+                      size: 16,
+                      color: themeData.color.foldExpandButton,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRefExpandButton() {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onToggleRefExpand,
+        behavior: HitTestBehavior.opaque,
+        child: Center(
+          child: AnimatedContainer(
+            curve: Curves.easeInOut,
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              color: isRefExpanded
+                  ? Colors.blueGrey.shade100
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: themeData.color.foldExpandButton,
+                  width: 0.5,
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              child: SizedBox.square(
+                dimension: themeData.fontSize,
+                child: Icon(
+                  Icons.link,
+                  size: themeData.fontSize - 4,
+                  color: isRefExpanded
+                      ? Colors.blueGrey.shade700
+                      : themeData.color.foldExpandButton,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

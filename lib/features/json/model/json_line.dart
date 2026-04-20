@@ -1,3 +1,5 @@
+import 'json_value.dart';
+
 enum JsonTokenType {
   key,
   colon,
@@ -49,6 +51,12 @@ class JsonLine {
   /// `"[1,2,3]"`) so the View can display it when the container is collapsed.
   final String? parsedFromRawText;
 
+  /// Non-null when this container-start line represents a `NormalJsonObject`
+  /// that has a fastjson `$ref` resolved value.  Stores the resolved
+  /// [JsonValue] so the View can toggle between the original `{"$ref":"..."}` 
+  /// content and the dereferenced value.
+  final JsonValue? refValue;
+
   const JsonLine({
     required this.lineNumber,
     required this.content,
@@ -58,5 +66,6 @@ class JsonLine {
     required this.isBasicASCII,
     this.childCount,
     this.parsedFromRawText,
+    this.refValue,
   });
 }
