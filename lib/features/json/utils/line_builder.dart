@@ -84,6 +84,7 @@ class _JsonLineBuilder {
           bracketDepth: bracketDepth,
           keyExtractor: (JsonObjectKeyString key) => key.value.rawText,
           refValue: value.ref,
+          shortString: value.shortString,
         );
       case ExtendedJsonObject():
         _buildObjectLines(
@@ -215,6 +216,7 @@ class _JsonLineBuilder {
     required String Function(T key) keyExtractor,
     String? parsedFromRawText,
     JsonValue? refValue,
+    String? shortString,
   }) {
     final depth = bracketDepth;
     if (entryMap.isEmpty) {
@@ -236,6 +238,7 @@ class _JsonLineBuilder {
       childCount: entryMap.length,
       parsedFromRawText: parsedFromRawText,
       refValue: refValue,
+      shortString: shortString,
       tokens: [
         ..._keyTokens(keyString),
         JsonLineToken('{', JsonTokenType.bracket, bracketDepth: depth),
@@ -299,6 +302,7 @@ class _JsonLineBuilder {
     int? childCount,
     String? parsedFromRawText,
     JsonValue? refValue,
+    String? shortString,
   }) {
     final content = tokens.map((t) => t.text).join();
     _lines.add(JsonLine(
@@ -311,6 +315,7 @@ class _JsonLineBuilder {
       childCount: childCount,
       parsedFromRawText: parsedFromRawText,
       refValue: refValue,
+      shortString: shortString,
     ));
   }
 

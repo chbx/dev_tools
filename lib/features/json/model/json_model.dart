@@ -89,6 +89,9 @@ class JsonModel {
         parsedContainers.add(line.lineNumber);
         defaultCollapsed.add(line.lineNumber);
       }
+      if (line.shortString != null) {
+        defaultCollapsed.add(line.lineNumber);
+      }
     }
     return JsonModel._(
       rootValue: rootValue,
@@ -145,6 +148,7 @@ class JsonModel {
               childCount: firstRefLine.childCount,
               parsedFromRawText: firstRefLine.parsedFromRawText,
               refValue: line.refValue,
+              shortString: firstRefLine.shortString,
             );
           }
         }

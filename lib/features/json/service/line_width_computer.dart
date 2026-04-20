@@ -163,18 +163,21 @@ class LineWidthComputer {
       final textWidth = _measureSpansWidth(spans);
       return indentPixels + textWidth;
     } else {
-      // Normal container: displays "{ ...N }" or "[ ...N ]".
+      // Normal container: displays "{ ...N }" or "[ ...N ]",
+      // or "{ CNY 12.34 }" when shortString is present.
       final closeBracket =
           line.lineType == JsonLineType.objectStart ? '}' : ']';
-      final count = line.childCount;
-      final countText = count != null ? ' ...$count ' : ' ... ';
+      final shortString = line.shortString;
+      final summaryText = shortString != null
+          ? ' $shortString '
+          : (line.childCount != null ? ' ...${line.childCount} ' : ' ... ');
       int prefixCharCount = 0;
       for (final token in prefixTokens) {
         prefixCharCount += token.text.length;
       }
-      // openBracket + countText + closeBracket
+      // openBracket + summaryText + closeBracket
       final collapsedTextLength =
-          prefixCharCount + 1 + countText.length + closeBracket.length;
+          prefixCharCount + 1 + summaryText.length + closeBracket.length;
       return indentPixels + collapsedTextLength * _monoCharWidth;
     }
   }

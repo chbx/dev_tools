@@ -57,6 +57,11 @@ class JsonLine {
   /// content and the dereferenced value.
   final JsonValue? refValue;
 
+  /// Non-null when this container-start line represents a `NormalJsonObject`
+  /// with a display summary (e.g. money hint like "CNY 12.34").  Shown in
+  /// place of the default "...N" when the container is collapsed.
+  final String? shortString;
+
   const JsonLine({
     required this.lineNumber,
     required this.content,
@@ -67,5 +72,6 @@ class JsonLine {
     this.childCount,
     this.parsedFromRawText,
     this.refValue,
+    this.shortString,
   });
 }

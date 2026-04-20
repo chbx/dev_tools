@@ -577,8 +577,13 @@ class _JsonViewLineWidget extends StatelessWidget {
     JsonViewerTextStyle textStyleTheme,
   ) {
     final closeBracket = line.lineType == JsonLineType.objectStart ? '}' : ']';
-    final count = line.childCount;
-    final countText = count != null ? ' ...$count ' : ' ... ';
+    final shortString = line.shortString;
+    final summaryText = shortString != null
+        ? ' $shortString '
+        : (line.childCount != null ? ' ...${line.childCount} ' : ' ... ');
+    final summaryStyle = shortString != null
+        ? textStyleTheme.shortString
+        : textStyleTheme.foldForeground;
 
     // Find the bracket token to reuse its bracketDepth for consistent coloring.
     final bracketToken = line.tokens.whereType<JsonLineToken>().where(
@@ -610,7 +615,7 @@ class _JsonViewLineWidget extends StatelessWidget {
       );
     }
     foldSpans.add(
-      TextSpan(text: countText, style: textStyleTheme.foldForeground),
+      TextSpan(text: summaryText, style: summaryStyle),
     );
     foldSpans.add(TextSpan(text: closeBracket, style: bracketStyle));
 
